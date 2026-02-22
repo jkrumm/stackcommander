@@ -1,0 +1,27 @@
+node_modules
+dist
+dist-ssr
+.output
+.vinxi
+.nitro
+.tanstack
+.wrangler
+__unconfig*
+*.local
+
+# Bun
+bun.lock
+
+# OS
+.DS_Store
+*.pem
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
