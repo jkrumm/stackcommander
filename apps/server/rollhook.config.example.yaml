@@ -4,8 +4,3 @@ apps:
     clone_path: /srv/apps/my-api
   - name: my-frontend
     clone_path: /srv/apps/my-frontend
-notifications:
-  pushover:
-    user_key: ''
-    app_token: ''
-  webhook: ''

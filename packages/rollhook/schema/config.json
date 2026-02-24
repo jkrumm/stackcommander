@@ -31,21 +31,15 @@
     "notifications": {
       "type": "object",
       "properties": {
-        "pushover": {
-          "type": "object",
-          "required": [
-            "user_key",
-            "app_token"
-          ],
-          "properties": {
-            "user_key": {
-              "type": "string"
-            },
-            "app_token": {
-              "type": "string"
-            }
-          }
-        },
+        "webhook": {
+          "description": "URL to POST job result JSON to",
+          "type": "string"
+        }
+      }
+    },
+    "notifications": {
+      "type": "object",
+      "properties": {
         "webhook": {
           "description": "URL to POST job result JSON to",
           "type": "string"

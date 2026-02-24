@@ -6,8 +6,9 @@ export type Role = 'admin' | 'webhook'
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN
 const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN
 
-if (!ADMIN_TOKEN || !WEBHOOK_TOKEN)
+if (!ADMIN_TOKEN || !WEBHOOK_TOKEN) {
   throw new Error('ADMIN_TOKEN and WEBHOOK_TOKEN environment variables are required')
+}
 
 export function requireRole(role: Role) {
   return new Elysia({ name: `auth-${role}` })

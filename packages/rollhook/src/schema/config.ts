@@ -9,10 +9,6 @@ export const ServerConfigSchema = Type.Object({
     { description: 'Registered apps' },
   ),
   notifications: Type.Optional(Type.Object({
-    pushover: Type.Optional(Type.Object({
-      user_key: Type.String(),
-      app_token: Type.String(),
-    })),
     webhook: Type.Optional(Type.String({ description: 'URL to POST job result JSON to' })),
   })),
 }, {

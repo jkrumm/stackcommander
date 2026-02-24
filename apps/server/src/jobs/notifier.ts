@@ -1,11 +1,10 @@
+import process from 'node:process'
 import type { JobResult } from 'rollhook'
 import { loadConfig } from '@/config/loader'
 
 export async function notify(job: JobResult): Promise<void> {
   const config = loadConfig()
   const notifications = config.notifications
-  if (!notifications)
-    return
 
   const title = job.status === 'success'
     ? `✅ Deployed ${job.app}`
@@ -14,11 +13,13 @@ export async function notify(job: JobResult): Promise<void> {
 
   const promises: Promise<void>[] = []
 
-  if (notifications.pushover?.user_key && notifications.pushover?.app_token) {
-    promises.push(sendPushover(notifications.pushover.user_key, notifications.pushover.app_token, title, message))
+  const pushoverUserKey = process.env.PUSHOVER_USER_KEY
+  const pushoverAppToken = process.env.PUSHOVER_APP_TOKEN
+  if (pushoverUserKey && pushoverAppToken) {
+    promises.push(sendPushover(pushoverUserKey, pushoverAppToken, title, message))
   }
 
-  if (notifications.webhook) {
+  if (notifications?.webhook) {
     promises.push(sendWebhook(notifications.webhook, job))
   }
 
