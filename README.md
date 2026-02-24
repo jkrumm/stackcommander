@@ -157,7 +157,7 @@ networks:
     external: true
 ```
 
-**Image tag pattern:** use `${IMAGE_TAG:-registry.example.com/my-api:latest}` in `compose.yml`. RollHook writes `IMAGE_TAG=<full-uri>` to a `.env` file co-located with `compose_path` before each rollout. The `.env` is managed exclusively by RollHook — do not store other compose variables there.
+**Image tag pattern:** use `${IMAGE_TAG:-registry.example.com/my-api:latest}` in `compose.yml`. RollHook passes `IMAGE_TAG=<full-uri>` as an inline environment variable when invoking `docker rollout` — no `.env` file is written or required.
 
 ---
 

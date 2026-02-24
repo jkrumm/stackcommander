@@ -1,22 +1,23 @@
 import { appendFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import process from 'node:process'
 
 // Note: steps always run sequentially (post-MVP: dependency graph)
 export async function rolloutApp(
   composePath: string,
   steps: Array<{ service: string }>,
+  imageTag: string,
   logPath: string,
 ): Promise<void> {
   const log = (line: string) => appendFileSync(logPath, `${line}\n`)
   const cwd = dirname(composePath)
 
   for (const step of steps) {
-    log(`[rollout] Rolling out service: ${step.service}`)
+    log(`[rollout] Rolling out service: ${step.service} (IMAGE_TAG=${imageTag})`)
 
-    const args = ['rollout', step.service, '-f', composePath]
-
-    const proc = Bun.spawn(['docker', ...args], {
+    const proc = Bun.spawn(['docker', 'rollout', step.service, '-f', composePath], {
       cwd,
+      env: { ...process.env, IMAGE_TAG: imageTag },
       stdout: 'pipe',
       stderr: 'pipe',
     })

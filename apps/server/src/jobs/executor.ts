@@ -6,7 +6,6 @@ import { loadConfig } from '@/config/loader'
 import { getJob, insertJob, updateJobStatus } from '@/db/jobs'
 import { notify } from '@/jobs/notifier'
 import { enqueue, setProcessor } from '@/jobs/queue'
-import { writeEnvFile } from '@/jobs/steps/env'
 import { pullImage } from '@/jobs/steps/pull'
 import { rolloutApp } from '@/jobs/steps/rollout'
 import { validateCompose } from '@/jobs/steps/validate'
@@ -36,8 +35,7 @@ async function executeJob(job: { jobId: string, app: string, imageTag: string })
 
     validateCompose(appConfig.compose_path, logPath)
     await pullImage(imageTag, logPath)
-    writeEnvFile(appConfig.compose_path, imageTag, logPath)
-    await rolloutApp(appConfig.compose_path, appConfig.steps, logPath)
+    await rolloutApp(appConfig.compose_path, appConfig.steps, imageTag, logPath)
     log(`[executor] Deployment successful: ${app}`)
   }
   catch (err) {

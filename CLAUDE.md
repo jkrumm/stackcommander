@@ -25,11 +25,10 @@ rollhook/
         middleware/
           auth.ts                  # Bearer token plugin (role: admin | webhook)
         jobs/
-          executor.ts              # Main orchestrator: validate → pull → env → rollout → notify
+          executor.ts              # Main orchestrator: validate → pull → rollout → notify
           steps/pull.ts            # docker pull <image>
           steps/validate.ts        # Pre-deploy: check compose_path is absolute + exists
-          steps/env.ts             # Write IMAGE_TAG=<uri> to .env next to compose file
-          steps/rollout.ts         # docker rollout (ordered, healthcheck-gated)
+          steps/rollout.ts         # docker rollout (ordered, healthcheck-gated, IMAGE_TAG via env)
           notifier.ts              # Pushover + configurable webhook
           queue.ts                 # In-memory job queue (Bun-native)
         db/
