@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Self-hosted unified admin suite for solo devs. Replaces Coolify, Doppler, Umami, Sentry, and LaunchDarkly with a single infra container on a VPS.
+Webhook-driven rolling deployment orchestrator for Docker Compose stacks on self-hosted VPS. Receives GitHub Actions webhook calls, runs zero-downtime rolling deployments via `docker-rollout`, and streams job logs back to CI.
 
 See: `~/Obsidian/Vault/03_Projects/stackcommander.md`
 North Star Stack: `~/Obsidian/Vault/04_Areas/Engineering/north-star-stack.md`
@@ -14,14 +14,53 @@ North Star Stack: `~/Obsidian/Vault/04_Areas/Engineering/north-star-stack.md`
 ```
 stackcommander/
   apps/
-    server/          # @stackcommander/server — Elysia unified server (port 7700)
-    web/             # @stackcommander/web — TanStack Start frontend (build only)
+    server/                        # @stackcommander/server — Elysia API (port 7700)
+      src/
+        app.ts                     # Bare Elysia app (no .listen()), plugin composition
+        api/
+          health.ts                # GET /health (no auth)
+          deploy.ts                # POST /deploy/:app
+          jobs.ts                  # GET /jobs/:id, GET /jobs/:id/logs (SSE), GET /jobs
+          registry.ts              # GET /registry, PATCH /registry/:app
+        middleware/
+          auth.ts                  # Bearer token plugin (role: admin | webhook)
+        jobs/
+          executor.ts              # Main orchestrator: validate → pull → rollout → notify
+          steps/pull.ts            # docker pull <image>
+          steps/validate.ts        # Pre-deploy: manifest schema + compose assertions
+          steps/rollout.ts         # docker rollout (ordered, healthcheck-gated)
+          notifier.ts              # Pushover + configurable webhook
+          queue.ts                 # In-memory job queue (Bun-native)
+        db/
+          client.ts                # bun:sqlite instance + auto-migrations
+          jobs.ts                  # Job CRUD (insert, get, updateStatus)
+        config/
+          loader.ts                # Parse + validate stackcommander.config.yaml
+          schema.ts                # TypeBox schema for server config
+      server.ts                    # Entry — .listen(7700)
+      stackcommander.config.example.yaml
   packages/
-    stackcommander/  # stackcommander — Core shared package
-  data/              # File-based store (gitignored) — temp DB until Drizzle added
-  package.json       # Bun workspace root
-  tsconfig.json      # Root TypeScript 6.0 config (inherited by all packages)
-  eslint.config.mjs  # @antfu/eslint-config (flat config, handles formatting too)
+    stackcommander/                # stackcommander — public NPM package
+      src/
+        schema/
+          app.ts                   # TypeBox schema for stackcommander.yaml
+          config.ts                # TypeBox schema for stackcommander.config.yaml
+        types.ts                   # Derived TS types: AppConfig, ServerConfig, JobResult
+        index.ts                   # Re-exports
+      schema/
+        app.json                   # Generated JSON Schema (from Zod, via zod-to-json-schema)
+        config.json                # Generated JSON Schema (from Zod)
+  data/                            # gitignored
+    stackcommander.db              # SQLite — job metadata
+    logs/                          # data/logs/<job-id>.log — raw job output
+  examples/
+    infra/
+      compose.infra.yml            # Traefik + Alloy + StackCommander reference stack
+      config.alloy                 # Alloy reference config for log/metrics collection
+    bun-hello-world/               # Reference app: stackcommander.yaml + healthcheck
+  package.json                     # Bun workspace root
+  tsconfig.json                    # Root TypeScript 6.0 config (inherited by all packages)
+  eslint.config.mjs                # @antfu/eslint-config (flat config, handles formatting too)
 ```
 
 ---
@@ -33,11 +72,12 @@ stackcommander/
 | Runtime | Bun 1.3.9 |
 | Monorepo | Bun workspaces (native) |
 | Language | TypeScript 6.0.0-beta |
-| Backend | Elysia (Bun-native, auto-typed routes, hosts frontend) |
-| API Client | Eden Treaty (`@elysiajs/eden`) — isomorphic, zero-HTTP on server |
+| Backend | Elysia (Bun-native, OpenAPI, bearer auth plugin) |
 | API Docs | Scalar via `@elysiajs/openapi` at `/openapi` |
-| Frontend | TanStack Start v1 (SSR React, file-based routing, served by Elysia) |
-| Styling | Tailwind CSS v4 |
+| Database | `bun:sqlite` — `data/stackcommander.db`, job metadata |
+| Config | YAML (`stackcommander.config.yaml`) + Zod validation |
+| Schema | TypeBox (`@sinclair/typebox`) — schemas are valid JSON Schema natively, no conversion step |
+| Deployment | `docker-rollout` — zero-downtime rolling updates |
 | Linting/Formatting | @antfu/eslint-config (ESLint flat config, no Prettier) |
 
 ---
@@ -52,7 +92,6 @@ bun install
 
 # Add dep to a specific workspace
 bun add <pkg> --cwd apps/server
-bun add <pkg> --cwd apps/web
 bun add <pkg> --cwd packages/stackcommander
 ```
 
@@ -64,28 +103,10 @@ bun add <pkg> --cwd packages/stackcommander
 
 | Command | Action |
 |-|-|
-| `bun run dev` | Start single dev server (Elysia + Vite middleware on port 7700) |
-| `bun run build` | Build TanStack Start frontend to `apps/web/dist/` |
+| `bun run dev` | Start Elysia API server on port 7700 |
 | `bun run typecheck` | Type-check all workspaces |
 | `bun run lint` | Lint entire monorepo |
 | `bun run lint:fix` | Auto-fix lint + formatting |
-
-### Dev (single process)
-
-```bash
-bun run dev
-# → http://localhost:7700           TanStack Start SSR (via Vite middleware)
-# → http://localhost:7700/api/*     Elysia API routes
-# → http://localhost:7700/openapi   Scalar API docs
-```
-
-### Prod build + start
-
-```bash
-bun run build                                    # builds apps/web/dist/
-NODE_ENV=production bun --cwd apps/server run start
-# → http://localhost:7700  (static + TanStack Start handler)
-```
 
 ---
 
@@ -93,7 +114,6 @@ NODE_ENV=production bun --cwd apps/server run start
 
 - **Version:** 6.0.0-beta (managed at root, all workspaces inherit)
 - `ignoreDeprecations: "6.0"` is set where `baseUrl` is needed (TS6 deprecation)
-- `routeTree.gen.ts` in `apps/web/src/` is auto-generated — do not edit manually, regenerated on `bun run dev`
 
 ---
 
@@ -113,7 +133,6 @@ bun run lint:fix    # Fix + format
 | Directory | Package Name |
 |-|-|
 | `apps/server` | `@stackcommander/server` |
-| `apps/web` | `@stackcommander/web` |
 | `packages/stackcommander` | `stackcommander` |
 
 ---
@@ -122,95 +141,140 @@ bun run lint:fix    # Fix + format
 
 | File | Purpose |
 |-|-|
-| `apps/server/server.ts` | Entry point — adds Vite middleware (dev) or static serving (prod), calls `.listen(7700)` |
-| `apps/server/src/app.ts` | Bare Elysia instance — OpenAPI + API routes, no `.listen()`. Exported for Eden Treaty direct calls. |
-| `apps/server/src/api.ts` | API plugin (prefix `/api`) — TypeBox-typed routes |
-| `apps/server/src/store.ts` | File-based store — reads/writes `data/store.json` (shared across module systems) |
-
-`apps/server/package.json` exports:
-- `.` → `server.ts` (entry)
-- `./app` → `src/app.ts` (bare app for `treaty(app)` direct calls)
+| `apps/server/server.ts` | Entry point — `.listen(7700)` |
+| `apps/server/src/app.ts` | Bare Elysia app (no `.listen()`) — OpenAPI + route plugins |
+| `apps/server/src/api/deploy.ts` | `POST /deploy/:app` — accepts `image_tag`, enqueues job |
+| `apps/server/src/api/jobs.ts` | `GET /jobs/:id`, `GET /jobs/:id/logs` (SSE), `GET /jobs` |
+| `apps/server/src/api/registry.ts` | `GET /registry`, `PATCH /registry/:app` |
+| `apps/server/src/middleware/auth.ts` | Bearer token plugin — two roles: `admin`, `webhook` |
+| `apps/server/src/db/client.ts` | `bun:sqlite` instance, auto-migrations |
+| `apps/server/src/config/loader.ts` | Parse + validate `stackcommander.config.yaml` |
 
 OpenAPI (Scalar UI): `@elysiajs/openapi` — served at `/openapi`, JSON spec at `/openapi/json`.
 
 ---
 
-## TanStack Start Frontend
+## Auth
 
-| File | Purpose |
-|-|-|
-| `apps/web/src/router.tsx` | Router entry |
-| `apps/web/src/server.ts` | SSR handler entry (loaded by Elysia via `ssrLoadModule`) |
-| `apps/web/src/routes/` | File-based routes |
-| `apps/web/src/lib/api.ts` | Browser-side Eden Treaty client |
-| `apps/web/vite.config.ts` | Vite config — middleware mode only, no standalone server |
-| `apps/web/src/styles.css` | Tailwind v4 styles |
+Two bearer token roles, set via environment variables (never in config files):
+
+| Env var | Role | Allowed routes |
+|-|-|-|
+| `ADMIN_TOKEN` | `admin` | All routes |
+| `WEBHOOK_TOKEN` | `webhook` | `POST /deploy/:app` only |
 
 ---
 
-## Eden Treaty — Isomorphic API Client
+## Config
 
-### Architecture
+`stackcommander.config.yaml` — server config on the VPS, gitignored real file.
 
-Bun's native module system and Vite's SSR module system are isolated. `treaty(app)` works zero-HTTP because state lives in `data/store.json` (external to both module systems), not in module-level variables.
-
-### Browser client (`apps/web/src/lib/api.ts`)
-
-```ts
-import { treaty } from '@elysiajs/eden'
-import type { App } from '@stackcommander/server/app'
-
-export const api = treaty<App>('localhost:7700')
+```yaml
+# yaml-language-server: $schema=https://cdn.jsdelivr.net/npm/stackcommander/schema/config.json
+apps:
+  - name: my-api
+    clone_path: /srv/apps/my-api
+notifications:
+  pushover:
+    user_key: ""
+    app_token: ""
+  webhook: ""
 ```
 
-### SSR data loading — `createIsomorphicFn` (not `createServerFn`)
+Parsed and validated at startup via `apps/server/src/config/loader.ts` using `ServerConfigSchema` from `packages/stackcommander/src/schema/config.ts`.
 
-**Critical:** Use `createIsomorphicFn` for route loaders in this architecture. `createServerFn` creates an RPC endpoint and makes HTTP calls to `/_server/*` during SSR — Elysia has no such route, causing AbortErrors.
-
-```ts
-import { createIsomorphicFn } from '@tanstack/react-start'
-
-const getData = createIsomorphicFn()
-  .server(async () => {
-    // Zero-HTTP: calls Elysia handler directly, reads from file store
-    const [{ treaty }, { app }] = await Promise.all([
-      import('@elysiajs/eden'),
-      import('@stackcommander/server/app'),
-    ])
-    const { data } = await treaty(app).api.someRoute.get()
-    return data
-  })
-  .client(async () => {
-    // HTTP via Eden Treaty
-    const { data } = await api.api.someRoute.get()
-    return data
-  })
-
-export const Route = createFileRoute('/example')({
-  loader: () => getData(),
-  component: MyComponent,
-})
-```
-
-### When to use each
-
-| Tool | Use when |
-|-|-|
-| `createIsomorphicFn` | Route loaders — different server/client behaviour, no RPC endpoint |
-| `createServerFn` | Server-only mutations (DB writes, auth) called from client components |
-| `api.*` (plain Eden Treaty) | Client-side mutations from event handlers |
+An example file lives at `apps/server/stackcommander.config.example.yaml`.
 
 ---
 
-## Data Store
+## SQLite
 
-`apps/server/src/store.ts` — synchronous file I/O on `data/store.json`.
+`bun:sqlite` — `data/stackcommander.db`, zero external dependencies.
 
-- Shared across Bun native and Vite SSR module systems (file is external to both)
-- Intentionally simple until Drizzle + Postgres is added
+- Job metadata: id, app, status, image_tag, created_at, updated_at
+- Job logs: `data/logs/<job-id>.log` (flat files, SSE-streamed via `GET /jobs/:id/logs`)
 - `data/` is gitignored
 
-Replace with Drizzle when proper persistence is needed. Module-level `let` variables must NOT be used for shared state — each module system gets its own copy.
+---
+
+## YAML Schema Conventions
+
+All config files are YAML validated by TypeBox schemas. TypeBox produces valid JSON Schema natively — no conversion library needed. Schemas are published in the `stackcommander` npm package and served via jsDelivr CDN.
+
+### `stackcommander.yaml` (per app repo)
+
+```yaml
+# yaml-language-server: $schema=https://cdn.jsdelivr.net/npm/stackcommander/schema/app.json
+name: my-api
+compose_file: compose.yml
+steps:
+  - service: backend
+    wait_for_healthy: true
+  - service: frontend
+    wait_for_healthy: true
+    after: backend
+notifications:
+  on_failure: true
+  on_success: false
+secrets:
+  doppler_project: my-api
+  doppler_config: production
+```
+
+- TypeBox schema: `packages/stackcommander/src/schema/app.ts`
+- JSON Schema: `packages/stackcommander/schema/app.json`
+- CDN: `https://cdn.jsdelivr.net/npm/stackcommander/schema/app.json`
+
+### `stackcommander.config.yaml` (server config)
+
+- TypeBox schema: `packages/stackcommander/src/schema/config.ts`
+- JSON Schema: `packages/stackcommander/schema/config.json`
+- CDN: `https://cdn.jsdelivr.net/npm/stackcommander/schema/config.json`
+
+---
+
+## npm Package `stackcommander`
+
+Primarily a schema delivery mechanism — published to npm so JSON Schemas are served via jsDelivr CDN. Schemas are defined in TypeBox (already in the stack via Elysia) which produces valid JSON Schema natively — no conversion library needed. The server imports the same TypeBox schemas directly for Elysia route validation. Published via `/release` skill.
+
+**Exports:**
+
+```ts
+export { AppConfigSchema, ServerConfigSchema }         // TypeBox schemas (= JSON Schema objects)
+export type { AppConfig, ServerConfig, JobResult }     // Static<typeof Schema> derived types
+```
+
+**`package.json` exports:**
+
+```json
+{
+  "exports": {
+    ".":               "./dist/index.js",
+    "./schema/app":    "./schema/app.json",
+    "./schema/config": "./schema/config.json"
+  }
+}
+```
+
+JSON Schema files served via jsDelivr CDN from npm — no custom domain needed.
+
+---
+
+## API Surface
+
+```
+POST   /deploy/:app                # roles: admin, webhook
+  Body: { image_tag: string }
+  Returns: { job_id, app, status: "queued" }
+
+GET    /jobs/:id                   # role: admin
+GET    /jobs/:id/logs              # role: admin — SSE stream (text/event-stream)
+GET    /jobs?app=&status=&limit=   # role: admin — paginated history
+GET    /registry                   # role: admin — apps + last deploy
+PATCH  /registry/:app              # role: admin — update app config
+GET    /health                     # no auth
+GET    /openapi                    # Scalar UI, no auth
+```
 
 ---
 
