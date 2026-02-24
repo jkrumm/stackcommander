@@ -1,14 +1,14 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022"],
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "strict": true,
-    "skipLibCheck": true,
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    "strict": true,
     "noEmit": true,
+    "skipLibCheck": true,
     "noUncheckedSideEffectImports": true
   },
-  "exclude": ["node_modules", "**/node_modules", "**/dist", "**/.output", "**/.vinxi"]
+  "exclude": ["node_modules", "**/node_modules", "**/dist"]
 }

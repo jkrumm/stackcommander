@@ -1,8 +1,8 @@
 {
   "name": "@rollhook/server",
+  "type": "module",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "exports": {
     ".": "./server.ts",
     "./app": "./src/app.ts"
@@ -14,11 +14,12 @@
   },
   "dependencies": {
     "@elysiajs/openapi": "latest",
-    "@elysiajs/static": "latest",
+    "@sinclair/typebox": "^0.34.48",
     "elysia": "latest",
-    "elysia-connect-middleware": "latest"
+    "js-yaml": "^4.1.1",
+    "rollhook": "workspace:*"
   },
   "devDependencies": {
-    "vite": "latest"
+    "@types/js-yaml": "^4.0.9"
   }
 }

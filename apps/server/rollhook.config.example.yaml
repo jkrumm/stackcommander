@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://cdn.jsdelivr.net/npm/rollhook/schema/config.json
+apps:
+  - name: my-api
+    clone_path: /srv/apps/my-api
+  - name: my-frontend
+    clone_path: /srv/apps/my-frontend
+notifications:
+  pushover:
+    user_key: ''
+    app_token: ''
+  webhook: ''

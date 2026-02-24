@@ -48,8 +48,8 @@ rollhook/
         types.ts                   # Derived TS types: AppConfig, ServerConfig, JobResult
         index.ts                   # Re-exports
       schema/
-        app.json                   # Generated JSON Schema (from Zod, via zod-to-json-schema)
-        config.json                # Generated JSON Schema (from Zod)
+        app.json                   # Generated JSON Schema (from TypeBox)
+        config.json                # Generated JSON Schema (from TypeBox)
   data/                            # gitignored
     rollhook.db              # SQLite — job metadata
     logs/                          # data/logs/<job-id>.log — raw job output
@@ -67,18 +67,18 @@ rollhook/
 
 ## Tech Stack
 
-| Layer | Choice |
-|-|-|
-| Runtime | Bun 1.3.9 |
-| Monorepo | Bun workspaces (native) |
-| Language | TypeScript 6.0.0-beta |
-| Backend | Elysia (Bun-native, OpenAPI, bearer auth plugin) |
-| API Docs | Scalar via `@elysiajs/openapi` at `/openapi` |
-| Database | `bun:sqlite` — `data/rollhook.db`, job metadata |
-| Config | YAML (`rollhook.config.yaml`) + Zod validation |
-| Schema | TypeBox (`@sinclair/typebox`) — schemas are valid JSON Schema natively, no conversion step |
-| Deployment | `docker-rollout` — zero-downtime rolling updates |
-| Linting/Formatting | @antfu/eslint-config (ESLint flat config, no Prettier) |
+| Layer              | Choice                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------ |
+| Runtime            | Bun 1.3.9                                                                                  |
+| Monorepo           | Bun workspaces (native)                                                                    |
+| Language           | TypeScript 6.0.0-beta                                                                      |
+| Backend            | Elysia (Bun-native, OpenAPI, bearer auth plugin)                                           |
+| API Docs           | Scalar via `@elysiajs/openapi` at `/openapi`                                               |
+| Database           | `bun:sqlite` — `data/rollhook.db`, job metadata                                            |
+| Config             | YAML (`rollhook.config.yaml`) + Zod validation                                             |
+| Schema             | TypeBox (`@sinclair/typebox`) — schemas are valid JSON Schema natively, no conversion step |
+| Deployment         | `docker-rollout` — zero-downtime rolling updates                                           |
+| Linting/Formatting | @antfu/eslint-config (ESLint flat config, no Prettier)                                     |
 
 ---
 
@@ -101,12 +101,12 @@ bun add <pkg> --cwd packages/rollhook
 
 ### Root
 
-| Command | Action |
-|-|-|
-| `bun run dev` | Start Elysia API server on port 7700 |
-| `bun run typecheck` | Type-check all workspaces |
-| `bun run lint` | Lint entire monorepo |
-| `bun run lint:fix` | Auto-fix lint + formatting |
+| Command             | Action                               |
+| ------------------- | ------------------------------------ |
+| `bun run dev`       | Start Elysia API server on port 7700 |
+| `bun run typecheck` | Type-check all workspaces            |
+| `bun run lint`      | Lint entire monorepo                 |
+| `bun run lint:fix`  | Auto-fix lint + formatting           |
 
 ---
 
@@ -130,25 +130,25 @@ bun run lint:fix    # Fix + format
 
 ## Workspace Package Names
 
-| Directory | Package Name |
-|-|-|
-| `apps/server` | `@rollhook/server` |
-| `packages/rollhook` | `rollhook` |
+| Directory           | Package Name       |
+| ------------------- | ------------------ |
+| `apps/server`       | `@rollhook/server` |
+| `packages/rollhook` | `rollhook`         |
 
 ---
 
 ## Elysia Server
 
-| File | Purpose |
-|-|-|
-| `apps/server/server.ts` | Entry point — `.listen(7700)` |
-| `apps/server/src/app.ts` | Bare Elysia app (no `.listen()`) — OpenAPI + route plugins |
-| `apps/server/src/api/deploy.ts` | `POST /deploy/:app` — accepts `image_tag`, enqueues job |
-| `apps/server/src/api/jobs.ts` | `GET /jobs/:id`, `GET /jobs/:id/logs` (SSE), `GET /jobs` |
-| `apps/server/src/api/registry.ts` | `GET /registry`, `PATCH /registry/:app` |
-| `apps/server/src/middleware/auth.ts` | Bearer token plugin — two roles: `admin`, `webhook` |
-| `apps/server/src/db/client.ts` | `bun:sqlite` instance, auto-migrations |
-| `apps/server/src/config/loader.ts` | Parse + validate `rollhook.config.yaml` |
+| File                                 | Purpose                                                    |
+| ------------------------------------ | ---------------------------------------------------------- |
+| `apps/server/server.ts`              | Entry point — `.listen(7700)`                              |
+| `apps/server/src/app.ts`             | Bare Elysia app (no `.listen()`) — OpenAPI + route plugins |
+| `apps/server/src/api/deploy.ts`      | `POST /deploy/:app` — accepts `image_tag`, enqueues job    |
+| `apps/server/src/api/jobs.ts`        | `GET /jobs/:id`, `GET /jobs/:id/logs` (SSE), `GET /jobs`   |
+| `apps/server/src/api/registry.ts`    | `GET /registry`, `PATCH /registry/:app`                    |
+| `apps/server/src/middleware/auth.ts` | Bearer token plugin — two roles: `admin`, `webhook`        |
+| `apps/server/src/db/client.ts`       | `bun:sqlite` instance, auto-migrations                     |
+| `apps/server/src/config/loader.ts`   | Parse + validate `rollhook.config.yaml`                    |
 
 OpenAPI (Scalar UI): `@elysiajs/openapi` — served at `/openapi`, JSON spec at `/openapi/json`.
 
@@ -158,9 +158,9 @@ OpenAPI (Scalar UI): `@elysiajs/openapi` — served at `/openapi`, JSON spec at 
 
 Two bearer token roles, set via environment variables (never in config files):
 
-| Env var | Role | Allowed routes |
-|-|-|-|
-| `ADMIN_TOKEN` | `admin` | All routes |
+| Env var         | Role      | Allowed routes           |
+| --------------- | --------- | ------------------------ |
+| `ADMIN_TOKEN`   | `admin`   | All routes               |
 | `WEBHOOK_TOKEN` | `webhook` | `POST /deploy/:app` only |
 
 ---
@@ -176,9 +176,9 @@ apps:
     clone_path: /srv/apps/my-api
 notifications:
   pushover:
-    user_key: ""
-    app_token: ""
-  webhook: ""
+    user_key: ''
+    app_token: ''
+  webhook: ''
 ```
 
 Parsed and validated at startup via `apps/server/src/config/loader.ts` using `ServerConfigSchema` from `packages/rollhook/src/schema/config.ts`.
@@ -240,8 +240,8 @@ Primarily a schema delivery mechanism — published to npm so JSON Schemas are s
 **Exports:**
 
 ```ts
-export { AppConfigSchema, ServerConfigSchema }         // TypeBox schemas (= JSON Schema objects)
-export type { AppConfig, ServerConfig, JobResult }     // Static<typeof Schema> derived types
+export { AppConfigSchema, ServerConfigSchema } // TypeBox schemas (= JSON Schema objects)
+export type { AppConfig, JobResult, ServerConfig } // Static<typeof Schema> derived types
 ```
 
 **`package.json` exports:**
@@ -249,8 +249,8 @@ export type { AppConfig, ServerConfig, JobResult }     // Static<typeof Schema> 
 ```json
 {
   "exports": {
-    ".":               "./dist/index.js",
-    "./schema/app":    "./schema/app.json",
+    ".": "./dist/index.js",
+    "./schema/app": "./schema/app.json",
     "./schema/config": "./schema/config.json"
   }
 }
@@ -281,6 +281,7 @@ GET    /openapi                    # Scalar UI, no auth
 ## Git Workflow
 
 Follow SourceRoot conventions (see `~/SourceRoot/CLAUDE.md`):
+
 - `/commit` for conventional commits
 - `/pr` for GitHub PR workflow
 - No ticket numbers (personal project)

@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RollHook Server Config",
+  "description": "rollhook.config.yaml — server-side configuration",
+  "type": "object",
+  "required": [
+    "apps"
+  ],
+  "properties": {
+    "apps": {
+      "description": "Registered apps",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "clone_path"
+        ],
+        "properties": {
+          "name": {
+            "description": "Unique app name, matches the deploy/:app route param",
+            "type": "string"
+          },
+          "clone_path": {
+            "description": "Absolute path to the cloned repo on the VPS",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "notifications": {
+      "type": "object",
+      "properties": {
+        "pushover": {
+          "type": "object",
+          "required": [
+            "user_key",
+            "app_token"
+          ],
+          "properties": {
+            "user_key": {
+              "type": "string"
+            },
+            "app_token": {
+              "type": "string"
+            }
+          }
+        },
+        "webhook": {
+          "description": "URL to POST job result JSON to",
+          "type": "string"
+        }
+      }
+    }
+  }
+}
