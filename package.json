@@ -14,6 +14,7 @@
     "lint:fix": "eslint . --fix",
     "test": "bun test --preload ./apps/server/src/__tests__/preload.ts ./apps/server/src/__tests__",
     "test:e2e": "bun --filter @rollhook/e2e test",
+    "validate": "bun run lint:fix && bun run typecheck && bun run test && bun run test:e2e",
     "e2e:up": "docker compose -f e2e/compose.e2e.yml up -d",
     "e2e:down": "docker compose -f e2e/compose.e2e.yml down -v",
     "e2e:build": "docker build -t rollhook-e2e-hello:v1 --build-arg BUILD_VERSION=v1 examples/bun-hello-world && docker build -t rollhook-e2e-hello:v2 --build-arg BUILD_VERSION=v2 examples/bun-hello-world"
