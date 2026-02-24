@@ -1,5 +1,5 @@
-import { beforeAll, describe, expect, it } from 'vitest'
 import type { JobResult } from '../setup/fixtures.ts'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { adminHeaders, BASE_URL, pollJobUntilDone, webhookHeaders } from '../setup/fixtures.ts'
 
 const IMAGE_V1 = 'localhost:5001/rollhook-e2e-hello:v1'

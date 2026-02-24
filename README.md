@@ -46,10 +46,10 @@ Traefik handles ingress and zero-downtime traffic shifting during rollouts. Roll
 
 RollHook requires Traefik running on the same host. Reference configurations are in [`examples/infra/`](examples/infra/):
 
-| File | Purpose |
-|-|-|
-| `compose.infra.yml` | Traefik + Alloy + RollHook reference stack |
-| `config.alloy` | Alloy reference config for log/metrics collection |
+| File                | Purpose                                           |
+| ------------------- | ------------------------------------------------- |
+| `compose.infra.yml` | Traefik + Alloy + RollHook reference stack        |
+| `config.alloy`      | Alloy reference config for log/metrics collection |
 
 ---
 
@@ -88,7 +88,7 @@ apps:
     clone_path: /srv/apps/my-frontend
 
 notifications:
-  webhook: https://hooks.example.com/deployments  # optional
+  webhook: https://hooks.example.com/deployments # optional
 ```
 
 ### 3. Add `rollhook.yaml` to each app repo
@@ -97,7 +97,7 @@ notifications:
 # rollhook.yaml
 # yaml-language-server: $schema=https://cdn.jsdelivr.net/npm/rollhook/schema/app.json
 name: my-api
-compose_file: compose.yml  # optional, defaults to compose.yml
+compose_file: compose.yml # optional, defaults to compose.yml
 steps:
   - service: backend
   - service: frontend
@@ -133,11 +133,11 @@ Per-app config committed to each app repo. RollHook reads this from `clone_path`
 
 ```yaml
 # yaml-language-server: $schema=https://cdn.jsdelivr.net/npm/rollhook/schema/app.json
-name: my-api          # required — must match the name in rollhook.config.yaml
-compose_file: compose.yml  # optional, defaults to compose.yml
+name: my-api # required — must match the name in rollhook.config.yaml
+compose_file: compose.yml # optional, defaults to compose.yml
 
 steps:
-  - service: backend  # Docker Compose service name to roll out
+  - service: backend # Docker Compose service name to roll out
   - service: frontend # steps run sequentially
 ```
 
@@ -257,16 +257,16 @@ See [`examples/bun-hello-world/`](examples/bun-hello-world/) for a complete work
 
 Interactive docs at `/openapi` (Scalar UI). Key routes:
 
-| Method | Route | Auth | Description |
-|-|-|-|-|
-| `POST` | `/deploy/:app` | webhook, admin | Trigger rolling deployment |
-| `GET` | `/jobs/:id` | admin | Job status + metadata |
-| `GET` | `/jobs/:id/logs` | admin | SSE log stream |
-| `GET` | `/jobs` | admin | Paginated job history (`?app=&status=&limit=`) |
-| `GET` | `/registry` | admin | All registered apps + last deploy |
-| `PATCH` | `/registry/:app` | admin | Update app config at runtime |
-| `GET` | `/health` | none | Liveness check |
-| `GET` | `/openapi` | none | Scalar API docs |
+| Method  | Route            | Auth           | Description                                    |
+| ------- | ---------------- | -------------- | ---------------------------------------------- |
+| `POST`  | `/deploy/:app`   | webhook, admin | Trigger rolling deployment                     |
+| `GET`   | `/jobs/:id`      | admin          | Job status + metadata                          |
+| `GET`   | `/jobs/:id/logs` | admin          | SSE log stream                                 |
+| `GET`   | `/jobs`          | admin          | Paginated job history (`?app=&status=&limit=`) |
+| `GET`   | `/registry`      | admin          | All registered apps + last deploy              |
+| `PATCH` | `/registry/:app` | admin          | Update app config at runtime                   |
+| `GET`   | `/health`        | none           | Liveness check                                 |
+| `GET`   | `/openapi`       | none           | Scalar API docs                                |
 
 **Auth:** `Authorization: Bearer <token>` header.
 
@@ -294,23 +294,23 @@ Notification failures are written to the job log — they never affect job statu
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|-|-|-|
-| `ADMIN_TOKEN` | yes | Bearer token for admin API access |
-| `WEBHOOK_TOKEN` | yes | Bearer token for deploy webhook calls |
-| `ROLLHOOK_CONFIG_PATH` | no | Absolute path to config file (default: `rollhook.config.yaml` in CWD) |
-| `PUSHOVER_USER_KEY` | no | Pushover user key for mobile notifications |
-| `PUSHOVER_APP_TOKEN` | no | Pushover app token for mobile notifications |
+| Variable               | Required | Description                                                           |
+| ---------------------- | -------- | --------------------------------------------------------------------- |
+| `ADMIN_TOKEN`          | yes      | Bearer token for admin API access                                     |
+| `WEBHOOK_TOKEN`        | yes      | Bearer token for deploy webhook calls                                 |
+| `ROLLHOOK_CONFIG_PATH` | no       | Absolute path to config file (default: `rollhook.config.yaml` in CWD) |
+| `PUSHOVER_USER_KEY`    | no       | Pushover user key for mobile notifications                            |
+| `PUSHOVER_APP_TOKEN`   | no       | Pushover app token for mobile notifications                           |
 
 ---
 
 ## Volume Mounts (when running in Docker)
 
-| Path | Purpose |
-|-|-|
-| `/app/rollhook.config.yaml` | Server config (mount as read-only) |
-| `/app/data` | SQLite DB + job logs (persist across restarts) |
-| `/var/run/docker.sock` | Docker socket (required for deployment operations) |
+| Path                        | Purpose                                            |
+| --------------------------- | -------------------------------------------------- |
+| `/app/rollhook.config.yaml` | Server config (mount as read-only)                 |
+| `/app/data`                 | SQLite DB + job logs (persist across restarts)     |
+| `/var/run/docker.sock`      | Docker socket (required for deployment operations) |
 
 ---
 
@@ -318,9 +318,9 @@ Notification failures are written to the job log — they never affect job statu
 
 The `rollhook` npm package is primarily a schema delivery mechanism — schemas are served via jsDelivr CDN for YAML editor validation.
 
-| Schema | URL |
-|-|-|
-| `rollhook.yaml` | `https://cdn.jsdelivr.net/npm/rollhook/schema/app.json` |
+| Schema                 | URL                                                        |
+| ---------------------- | ---------------------------------------------------------- |
+| `rollhook.yaml`        | `https://cdn.jsdelivr.net/npm/rollhook/schema/app.json`    |
 | `rollhook.config.yaml` | `https://cdn.jsdelivr.net/npm/rollhook/schema/config.json` |
 
 Add the `# yaml-language-server: $schema=...` comment at the top of each YAML file for IDE validation.
@@ -343,6 +343,38 @@ import { AppConfigSchema } from 'rollhook'
       -H "Content-Type: application/json" \
       -d '{"image_tag": "${{ env.REGISTRY }}/my-api:${{ github.sha }}"}'
 ```
+
+---
+
+## Testing
+
+### Commands
+
+| Command                 | Description                                    |
+| ----------------------- | ---------------------------------------------- |
+| `bun run test`          | Unit tests (bun:test, no Docker required)      |
+| `bun run test:coverage` | Unit tests with per-file coverage table        |
+| `bun run test:e2e`      | E2E tests (requires Docker + `docker-rollout`) |
+| `bun run validate`      | Full suite: lint + typecheck + unit + E2E      |
+
+### Coverage scope
+
+`bun run test:coverage` reports unit test coverage only. E2E tests run the server as a subprocess — server-side coverage during E2E is not collected. The two test layers serve complementary purposes:
+
+- **Unit tests** — pure logic in isolation (auth middleware, config validation, queue, notifications)
+- **E2E tests** — behavioral contracts against a live server with real Docker, Traefik, and `docker-rollout`
+
+### Known gaps
+
+The following scenarios are not covered by the current test suite. They are tracked here rather than as TODO comments in code.
+
+| Area               | Gap                                                                                       | Risk   |
+| ------------------ | ----------------------------------------------------------------------------------------- | ------ |
+| `steps/rollout.ts` | Multi-service rollouts (2+ steps) — only single-service tested via E2E                    | Medium |
+| `config/loader.ts` | File-not-found and invalid YAML error paths — hard to unit test due to module-level cache | Medium |
+| `server.ts`        | Graceful SIGTERM: 503 response during shutdown, clean exit — code exists, no test         | Low    |
+| `api/jobs.ts`      | SSE stream abort mid-read, empty log file (404)                                           | Low    |
+| `api/deploy.ts`    | Empty `image_tag` input (passes `t.String()` validation)                                  | Low    |
 
 ---
 
