@@ -11,7 +11,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 
 # Download Docker CLI static binary + docker-rollout in a throw-away stage.
 # Static binaries work on any Linux regardless of libc version.
-FROM alpine:3 AS tool-downloader
+FROM alpine:3.21 AS tool-downloader
 RUN apk add --no-cache curl \
   && curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-27.5.1.tgz" \
      | tar xz --strip-components=1 -C /usr/local/bin docker/docker \

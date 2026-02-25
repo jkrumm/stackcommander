@@ -47,7 +47,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-npm-semantic-release-v1
+          key: ${{ runner.os }}-npm-semantic-release-${{ hashFiles('.github/workflows/release.yml') }}
           restore-keys: ${{ runner.os }}-npm-semantic-release-
 
       - name: Run semantic-release
