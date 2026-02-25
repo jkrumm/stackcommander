@@ -1,0 +1,239 @@
+---
+import Layout from '../layouts/Layout.astro'
+---
+
+<Layout
+  title="RollHook — Zero-Downtime Deployments"
+  description="Webhook-driven rolling deployment orchestrator for Docker Compose stacks on self-hosted VPS."
+>
+  <div class="min-h-screen flex flex-col">
+    <!-- Nav -->
+    <header class="border-b border-border/40 px-6 py-4">
+      <div class="max-w-5xl mx-auto flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 406 564"
+            class="h-7 w-auto fill-foreground"
+            aria-hidden="true"
+          >
+            <path
+              d="M217.05 59.414 219 61v2h2c9.975 12.162 13.04 23.444 12 39-1.781 10.881-8.423 21.74-17.027 28.621-3.942 2.778-7.66 4.7-12.223 6.254-6.915 2.664-8.444 7.207-11.355 13.71a576 576 0 0 0-2.67 6.146A214 214 0 0 1 183.5 170a252 252 0 0 0-7 15c-2.691 6.271-5.653 12.354-8.75 18.438-2.449 4.985-4.62 10.071-6.781 15.187-1.626 3.727-3.446 7.34-5.281 10.969-3.638 7.197-6.937 14.526-10.188 21.906-3.777 8.574-7.69 17.027-11.953 25.367-1.945 3.938-3.6 7.96-5.238 12.031-1.191 2.823-2.494 5.566-3.845 8.315-6.937 14.235-11.052 29.17-13.464 44.787l-.559 3.309c-3.196 26.727 1.857 55.753 17.829 77.828 2.165 2.704 4.4 5.3 6.73 7.863l1.633 1.879c15.176 16.434 38.24 26.263 60.383 27.46 28.72.872 53.883-9.07 74.797-28.651 5.068-5.264 8.635-11.34 12.187-17.688l1.434-2.457c2.807-5.133 4.626-10.464 6.316-16.043l.64-2.085c2.745-9.557 2.75-19.162 2.673-29.04l-.014-3.332q-.018-4.021-.049-8.043c-4.359 1.366-8.412 3.043-12.535 5.004l-3.701 1.744q-2.878 1.364-5.754 2.732-2.801 1.33-5.608 2.649l-3.36 1.596c-2.723 1.141-5.134 1.831-8.042 2.275 1.64-5.95 4.632-11.027 7.625-16.375 3.552-6.426 7.074-12.848 10.313-19.437a1053 1053 0 0 1 24.31-46.345c3.218-5.807 6.2-11.692 9.127-17.652 2.647-5.198 5.617-10.196 8.625-15.191l1.703-2.84L319 249l2 1c.566 2.992 1.001 5.92 1.367 8.938l.363 2.817c.392 3.08.77 6.162 1.145 9.245l.396 3.21a3410 3410 0 0 1 2.363 19.69q.51 4.31 1.034 8.62c2.375 19.764 3.718 39.381 3.832 59.293l.032 2.795c.326 36.557-12.13 68.907-37.782 95.08-23.538 23.275-55.969 37.057-89.167 37.332-5.216-.105-10.395-.492-15.583-1.02l-3.383-.344c-33.218-4.329-62.416-21.542-83.281-47.539-24.282-32.403-32.435-70.55-26.993-110.646C78.733 315 85.92 294.752 95 274l1.512-3.473c4.974-11.4 9.961-22.765 15.652-33.828 2.586-5.114 4.904-10.357 7.273-15.574 3.385-7.448 6.855-14.823 10.574-22.109 2.833-5.596 5.417-11.296 7.989-17.016 2.905-6.458 5.862-12.87 9.063-19.187l.948-1.887c1.4-2.783 2.804-5.565 4.223-8.34a783 783 0 0 0 3.828-7.649l1.233-2.381c2.39-4.884 3.399-8.134 1.705-13.556-1.845-2.558-1.845-2.558-4.25-4.75-8.424-8.852-10.98-18.775-12.062-30.687C143.645 82.646 147.228 71.04 155 63h2v-2c19.042-14.29 40.099-14.622 60.05-1.586M179 87c-2.701 4.052-2.762 7.243-2 12 1.283 3.008 2.315 3.809 5 6 4.284 1.371 7.704 1.535 11.875-.187 3.875-3.222 3.875-3.222 5.445-7.895.201-4.037.032-6.327-2.07-9.856-3.103-2.844-4.94-3.891-9.125-4.437-3.97.476-6.02 1.905-9.125 4.375"
+            ></path>
+          </svg>
+          <span class="font-semibold tracking-tight">RollHook</span>
+        </div>
+        <a
+          href="https://github.com/jkrumm/rollhook"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          GitHub
+        </a>
+      </div>
+    </header>
+
+    <main class="flex-1">
+      <!-- Hero -->
+      <section class="px-6 py-24 sm:py-32">
+        <div class="max-w-3xl mx-auto text-center space-y-6">
+          <div
+            class="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs text-muted-foreground"
+          >
+            <span class="relative flex h-2 w-2">
+              <span
+                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"
+              ></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
+            Open Source &middot; Self-Hosted &middot; Bun-Native
+          </div>
+
+          <h1 class="text-4xl sm:text-6xl font-bold tracking-tight">
+            Zero-Downtime Deployments,<br />
+            <span class="text-muted-foreground">Webhooks-First</span>
+          </h1>
+
+          <p class="text-lg text-muted-foreground max-w-xl mx-auto leading-relaxed">
+            RollHook orchestrates rolling Docker Compose updates triggered by GitHub Actions
+            webhooks &mdash; with real-time log streaming and zero infrastructure overhead.
+          </p>
+
+          <div class="flex items-center justify-center gap-4 pt-2">
+            <a
+              href="https://github.com/jkrumm/rollhook"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-2 rounded-md bg-foreground text-background px-5 py-2.5 text-sm font-medium hover:bg-foreground/90 transition-colors"
+            >
+              View on GitHub
+            </a>
+            <a
+              href="#how-it-works"
+              class="inline-flex items-center gap-2 rounded-md border border-border px-5 py-2.5 text-sm font-medium hover:bg-muted/50 transition-colors"
+            >
+              How it works
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Code example -->
+      <section class="px-6 pb-20">
+        <div class="max-w-2xl mx-auto">
+          <div class="rounded-lg border border-border/60 bg-muted/20 overflow-hidden">
+            <div class="flex items-center gap-2 px-4 py-3 border-b border-border/40">
+              <div class="flex gap-1.5">
+                <div class="h-3 w-3 rounded-full bg-muted-foreground/30"></div>
+                <div class="h-3 w-3 rounded-full bg-muted-foreground/30"></div>
+                <div class="h-3 w-3 rounded-full bg-muted-foreground/30"></div>
+              </div>
+              <span class="text-xs text-muted-foreground ml-2">GitHub Actions workflow</span>
+            </div>
+            <pre class="p-5 text-sm font-mono text-foreground/80 overflow-x-auto leading-relaxed"><code><span class="text-muted-foreground"># .github/workflows/deploy.yml</span>
+- name: Deploy via RollHook
+  run: |
+    curl -s -X POST \
+      -H <span class="text-green-400">"Authorization: Bearer $&#123;&#123; secrets.WEBHOOK_TOKEN &#125;&#125;"</span> \
+      -H <span class="text-green-400">"Content-Type: application/json"</span> \
+      -d <span class="text-green-400">'&#123;"image_tag": "$&#123;&#123; github.sha &#125;&#125;"&#125;'</span> \
+      https://rollhook.example.com/deploy/my-api</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Features -->
+      <section class="px-6 py-20 border-t border-border/40">
+        <div class="max-w-5xl mx-auto">
+          <h2 class="text-2xl font-semibold text-center mb-12">Everything you need</h2>
+          <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="rounded-lg border border-border/60 bg-muted/10 p-5 space-y-2 hover:bg-muted/20 transition-colors">
+              <div class="text-2xl">&#x26A1;</div>
+              <h3 class="font-medium">Webhook-Driven</h3>
+              <p class="text-sm text-muted-foreground leading-relaxed">POST /deploy/:app from GitHub Actions. Bearer token auth with admin and webhook roles.</p>
+            </div>
+            <div class="rounded-lg border border-border/60 bg-muted/10 p-5 space-y-2 hover:bg-muted/20 transition-colors">
+              <div class="text-2xl">&#x1F504;</div>
+              <h3 class="font-medium">Zero-Downtime</h3>
+              <p class="text-sm text-muted-foreground leading-relaxed">Rolling updates via docker-rollout with automatic healthcheck gating between steps.</p>
+            </div>
+            <div class="rounded-lg border border-border/60 bg-muted/10 p-5 space-y-2 hover:bg-muted/20 transition-colors">
+              <div class="text-2xl">&#x1F4E1;</div>
+              <h3 class="font-medium">Real-Time Logs</h3>
+              <p class="text-sm text-muted-foreground leading-relaxed">Server-Sent Events stream deployment output in real time. No polling required.</p>
+            </div>
+            <div class="rounded-lg border border-border/60 bg-muted/10 p-5 space-y-2 hover:bg-muted/20 transition-colors">
+              <div class="text-2xl">&#x1F5C4;&#xFE0F;</div>
+              <h3 class="font-medium">SQLite-Backed</h3>
+              <p class="text-sm text-muted-foreground leading-relaxed">Job metadata in bun:sqlite, logs in flat files. No external databases or message brokers.</p>
+            </div>
+            <div class="rounded-lg border border-border/60 bg-muted/10 p-5 space-y-2 hover:bg-muted/20 transition-colors">
+              <div class="text-2xl">&#x1F433;</div>
+              <h3 class="font-medium">Docker-Native</h3>
+              <p class="text-sm text-muted-foreground leading-relaxed">Works with any Docker Compose stack. Pull, validate, rollout &mdash; per service, per step.</p>
+            </div>
+            <div class="rounded-lg border border-border/60 bg-muted/10 p-5 space-y-2 hover:bg-muted/20 transition-colors">
+              <div class="text-2xl">&#x1F514;</div>
+              <h3 class="font-medium">Notifications</h3>
+              <p class="text-sm text-muted-foreground leading-relaxed">Pushover alerts and configurable webhook on job completion. Know when things go wrong.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- How it works -->
+      <section id="how-it-works" class="px-6 py-20 border-t border-border/40">
+        <div class="max-w-2xl mx-auto">
+          <h2 class="text-2xl font-semibold text-center mb-12">How it works</h2>
+          <ol class="space-y-6">
+            <li class="flex gap-5">
+              <span class="shrink-0 font-mono text-xs text-muted-foreground/60 pt-1 w-8">01</span>
+              <div class="space-y-1">
+                <p class="font-medium text-sm">GitHub Actions triggers deployment</p>
+                <p class="text-sm text-muted-foreground">Your CI pipeline sends POST /deploy/:app with the new image tag.</p>
+              </div>
+            </li>
+            <li class="flex gap-5">
+              <span class="shrink-0 font-mono text-xs text-muted-foreground/60 pt-1 w-8">02</span>
+              <div class="space-y-1">
+                <p class="font-medium text-sm">RollHook validates and pulls</p>
+                <p class="text-sm text-muted-foreground">Validates compose_path exists, then pulls the new Docker image from your registry.</p>
+              </div>
+            </li>
+            <li class="flex gap-5">
+              <span class="shrink-0 font-mono text-xs text-muted-foreground/60 pt-1 w-8">03</span>
+              <div class="space-y-1">
+                <p class="font-medium text-sm">Rolling update via docker-rollout</p>
+                <p class="text-sm text-muted-foreground">Services updated one step at a time, waiting for healthchecks to pass before continuing.</p>
+              </div>
+            </li>
+            <li class="flex gap-5">
+              <span class="shrink-0 font-mono text-xs text-muted-foreground/60 pt-1 w-8">04</span>
+              <div class="space-y-1">
+                <p class="font-medium text-sm">Logs stream in real time</p>
+                <p class="text-sm text-muted-foreground">Every log line is streamed via SSE. CI can tail deployment output as it happens.</p>
+              </div>
+            </li>
+            <li class="flex gap-5">
+              <span class="shrink-0 font-mono text-xs text-muted-foreground/60 pt-1 w-8">05</span>
+              <div class="space-y-1">
+                <p class="font-medium text-sm">Notification on completion</p>
+                <p class="text-sm text-muted-foreground">Pushover alert or webhook call with the full job result once deployment finishes.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- API Surface -->
+      <section class="px-6 py-20 border-t border-border/40">
+        <div class="max-w-2xl mx-auto">
+          <h2 class="text-2xl font-semibold text-center mb-12">API Surface</h2>
+          <div class="rounded-lg border border-border/60 bg-muted/20 overflow-hidden">
+            <pre class="p-5 text-sm font-mono leading-relaxed overflow-x-auto"><code><span class="text-green-400">POST  </span><span class="text-foreground/80">/deploy/:app        </span><span class="text-muted-foreground"># Trigger a deployment</span>
+<span class="text-blue-400">GET   </span><span class="text-foreground/80">/jobs/:id           </span><span class="text-muted-foreground"># Job status + metadata</span>
+<span class="text-blue-400">GET   </span><span class="text-foreground/80">/jobs/:id/logs      </span><span class="text-muted-foreground"># SSE log stream</span>
+<span class="text-blue-400">GET   </span><span class="text-foreground/80">/jobs               </span><span class="text-muted-foreground"># Deployment history</span>
+<span class="text-blue-400">GET   </span><span class="text-foreground/80">/registry           </span><span class="text-muted-foreground"># Apps + last deploy</span>
+<span class="text-yellow-400">PATCH </span><span class="text-foreground/80">/registry/:app      </span><span class="text-muted-foreground"># Update app config</span>
+<span class="text-blue-400">GET   </span><span class="text-foreground/80">/health             </span><span class="text-muted-foreground"># Health check (no auth)</span></code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section class="px-6 py-24 border-t border-border/40 text-center">
+        <div class="max-w-xl mx-auto space-y-6">
+          <h2 class="text-3xl font-bold tracking-tight">Ready to ship?</h2>
+          <p class="text-muted-foreground">
+            Self-hosted, open-source, and runs on any VPS with Docker. No vendor lock-in, no monthly bill.
+          </p>
+          <a
+            href="https://github.com/jkrumm/rollhook"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-2 rounded-md bg-foreground text-background px-6 py-3 text-sm font-medium hover:bg-foreground/90 transition-colors"
+          >
+            Get started on GitHub
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-border/40 px-6 py-8">
+      <div class="max-w-5xl mx-auto flex items-center justify-between text-sm text-muted-foreground">
+        <span>RollHook</span>
+        <a
+          href="https://github.com/jkrumm/rollhook"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="hover:text-foreground transition-colors"
+        >
+          github.com/jkrumm/rollhook
+        </a>
+      </div>
+    </footer>
+  </div>
+</Layout>
