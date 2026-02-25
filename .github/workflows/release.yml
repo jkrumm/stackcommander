@@ -36,14 +36,6 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - name: Install semantic-release
-        run: |
-          npm install -g semantic-release \
-            @semantic-release/changelog \
-            @semantic-release/git \
-            @semantic-release/github \
-            conventional-changelog-conventionalcommits
-
       - name: Run semantic-release
         id: semantic
         env:
