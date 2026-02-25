@@ -1,3 +1,10 @@
+## [1.0.7](https://github.com/jkrumm/rollhook/compare/v1.0.6...v1.0.7) (2026-02-25)
+
+
+### Bug Fixes
+
+* **ci:** add --tlog-upload=false for cosign v3 Zot-compatible signing ([f33fd0a](https://github.com/jkrumm/rollhook/commit/f33fd0a180b11900da4f247e24d2f21b7a9bdd99))
+
 ## [1.0.6](https://github.com/jkrumm/rollhook/compare/v1.0.5...v1.0.6) (2026-02-25)
 
 
