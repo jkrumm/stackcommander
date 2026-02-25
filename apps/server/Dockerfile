@@ -6,26 +6,25 @@ COPY apps/server/package.json ./apps/server/package.json
 COPY apps/web/package.json ./apps/web/package.json
 COPY packages/rollhook/package.json ./packages/rollhook/package.json
 COPY e2e/package.json ./e2e/package.json
-RUN bun install --frozen-lockfile --production
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --frozen-lockfile --production
+
+# Download Docker CLI static binary + docker-rollout in a throw-away stage.
+# Static binaries work on any Linux regardless of libc version.
+FROM alpine:3 AS tool-downloader
+RUN apk add --no-cache curl \
+  && curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-27.5.1.tgz" \
+     | tar xz --strip-components=1 -C /usr/local/bin docker/docker \
+  && curl -fsSL "https://github.com/wowu/docker-rollout/releases/download/v0.13/docker-rollout" \
+     -o /usr/local/bin/docker-rollout \
+  && chmod +x /usr/local/bin/docker-rollout
 
 FROM oven/bun:1.3.9-slim AS runner
 WORKDIR /app
 
-# Install Docker CLI + docker-rollout (server spawns these at runtime)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl \
-  && install -m 0755 -d /etc/apt/keyrings \
-  && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
-  && chmod a+r /etc/apt/keyrings/docker.asc \
-  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable" \
-     > /etc/apt/sources.list.d/docker.list \
-  && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli \
-  && mkdir -p /usr/local/lib/docker/cli-plugins \
-  && curl -fsSL https://github.com/wowu/docker-rollout/releases/download/v0.13/docker-rollout \
-     -o /usr/local/lib/docker/cli-plugins/docker-rollout \
-  && chmod +x /usr/local/lib/docker/cli-plugins/docker-rollout \
-  && apt-get purge -y curl && apt-get autoremove -y \
-  && rm -rf /var/lib/apt/lists/*
+COPY --from=tool-downloader /usr/local/bin/docker /usr/local/bin/docker
+RUN mkdir -p /usr/local/lib/docker/cli-plugins
+COPY --from=tool-downloader /usr/local/bin/docker-rollout /usr/local/lib/docker/cli-plugins/docker-rollout
 
 ENV NODE_ENV=production
 
