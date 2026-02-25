@@ -1,7 +1,7 @@
 {
   "name": "rollhook",
-  "private": true,
   "type": "module",
+  "private": true,
   "workspaces": [
     "apps/*",
     "packages/*",
