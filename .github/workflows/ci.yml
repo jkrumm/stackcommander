@@ -15,6 +15,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.9
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bun run typecheck
@@ -27,6 +32,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.9
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - run: bun run test
 
@@ -34,11 +44,17 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     needs: unit-test
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.9
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - name: Install docker-rollout
         run: |
@@ -48,7 +64,7 @@ jobs:
           chmod +x ~/.docker/cli-plugins/docker-rollout
       - name: Run E2E tests
         run: bun run test:e2e
-        timeout-minutes: 10
+        timeout-minutes: 12
       - name: Upload E2E job logs on failure
         if: failure()
         uses: actions/upload-artifact@v4

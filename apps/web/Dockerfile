@@ -6,7 +6,8 @@ COPY apps/server/package.json ./apps/server/package.json
 COPY apps/web/package.json ./apps/web/package.json
 COPY packages/rollhook/package.json ./packages/rollhook/package.json
 COPY e2e/package.json ./e2e/package.json
-RUN bun install --frozen-lockfile
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --frozen-lockfile
 
 COPY tsconfig.json ./
 COPY packages/rollhook ./packages/rollhook
