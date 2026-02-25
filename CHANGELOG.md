@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/jkrumm/rollhook/compare/v1.0.3...v1.0.4) (2026-02-25)
+
+
+### Bug Fixes
+
+* **docker:** skip lifecycle scripts during bun install ([1b81b35](https://github.com/jkrumm/rollhook/commit/1b81b351fc975a903f263d40de05a3bd71bf9802))
+
 ## [1.0.3](https://github.com/jkrumm/rollhook/compare/v1.0.2...v1.0.3) (2026-02-25)
 
 
