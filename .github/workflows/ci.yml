@@ -64,11 +64,21 @@ jobs:
           chmod +x ~/.docker/cli-plugins/docker-rollout
       - name: Pre-pull Docker images (with retry)
         run: |
+          pulled=0
           for i in 1 2 3; do
-            docker pull oven/bun:1.3.9-slim && break
-            echo "Pull attempt $i failed, retrying in 30s..."
-            sleep 30
+            if docker pull oven/bun:1.3.9-slim; then
+              pulled=1
+              break
+            fi
+            if [ "$i" -lt 3 ]; then
+              echo "Pull attempt $i failed, retrying in 30s..."
+              sleep 30
+            fi
           done
+          if [ "$pulled" -ne 1 ]; then
+            echo "Failed to pull oven/bun:1.3.9-slim after 3 attempts"
+            exit 1
+          fi
       - name: Run E2E tests
         run: bun run test:e2e
         timeout-minutes: 12
