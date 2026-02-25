@@ -9,8 +9,6 @@ dist-ssr
 __unconfig*
 *.local
 
-# Bun
-bun.lock
 
 # Data store (file-based DB, excluded from version control)
 data/

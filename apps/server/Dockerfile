@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      > /etc/apt/sources.list.d/docker.list \
   && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli \
   && mkdir -p /usr/local/lib/docker/cli-plugins \
-  && curl -fsSL https://github.com/wowu/docker-rollout/releases/download/v0.13.0/docker-rollout_linux_amd64 \
+  && curl -fsSL https://github.com/wowu/docker-rollout/releases/download/v0.13/docker-rollout \
      -o /usr/local/lib/docker/cli-plugins/docker-rollout \
   && chmod +x /usr/local/lib/docker/cli-plugins/docker-rollout \
   && apt-get purge -y curl && apt-get autoremove -y \

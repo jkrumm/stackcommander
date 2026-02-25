@@ -43,7 +43,7 @@ jobs:
       - name: Install docker-rollout
         run: |
           mkdir -p ~/.docker/cli-plugins
-          curl -fsSL https://github.com/wowu/docker-rollout/releases/download/v0.13.0/docker-rollout_linux_amd64 \
+          curl -fsSL https://github.com/wowu/docker-rollout/releases/download/v0.13/docker-rollout \
             -o ~/.docker/cli-plugins/docker-rollout
           chmod +x ~/.docker/cli-plugins/docker-rollout
       - name: Run E2E tests
