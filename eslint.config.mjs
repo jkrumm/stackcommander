@@ -9,7 +9,7 @@ export default antfu({
     '**/dist/**',
     '**/.output/**',
     '**/node_modules/**',
-    'apps/web/.astro/**',
+    'apps/marketing/.astro/**',
   ],
 })
   .override('antfu/react/rules', {

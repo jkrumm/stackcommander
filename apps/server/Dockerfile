@@ -3,7 +3,7 @@ WORKDIR /app
 
 COPY package.json bun.lock ./
 COPY apps/server/package.json ./apps/server/package.json
-COPY apps/web/package.json ./apps/web/package.json
+COPY apps/marketing/package.json ./apps/marketing/package.json
 COPY packages/rollhook/package.json ./packages/rollhook/package.json
 COPY e2e/package.json ./e2e/package.json
 RUN --mount=type=cache,target=/root/.bun/install/cache \

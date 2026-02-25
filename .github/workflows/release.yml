@@ -112,26 +112,62 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      - uses: sigstore/cosign-installer@v4
+
+      - name: Get build timestamp
+        id: meta
+        run: echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
       - name: Build & push server
+        id: build-server
         uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/server/Dockerfile
           push: true
           tags: |
-            registry.jkrumm.com/rollhook/server:${{ needs.release.outputs.version }}
-            registry.jkrumm.com/rollhook/server:latest
+            registry.jkrumm.com/rollhook:${{ needs.release.outputs.version }}
+            registry.jkrumm.com/rollhook:latest
+          labels: |
+            org.opencontainers.image.title=RollHook
+            org.opencontainers.image.description=Webhook-driven rolling deployment orchestrator for Docker Compose
+            org.opencontainers.image.source=https://github.com/jkrumm/rollhook
+            org.opencontainers.image.version=${{ needs.release.outputs.version }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.created }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build & push web
+      - name: Sign server image
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY \
+            registry.jkrumm.com/rollhook@${{ steps.build-server.outputs.digest }}
+
+      - name: Build & push marketing
+        id: build-marketing
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: apps/web/Dockerfile
+          file: apps/marketing/Dockerfile
           push: true
           tags: |
-            registry.jkrumm.com/rollhook/web:${{ needs.release.outputs.version }}
-            registry.jkrumm.com/rollhook/web:latest
+            registry.jkrumm.com/rollhook-marketing:${{ needs.release.outputs.version }}
+            registry.jkrumm.com/rollhook-marketing:latest
+          labels: |
+            org.opencontainers.image.title=RollHook Marketing
+            org.opencontainers.image.description=Marketing site for the RollHook deployment orchestrator
+            org.opencontainers.image.source=https://github.com/jkrumm/rollhook
+            org.opencontainers.image.version=${{ needs.release.outputs.version }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.created }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Sign marketing image
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY \
+            registry.jkrumm.com/rollhook-marketing@${{ steps.build-marketing.outputs.digest }}

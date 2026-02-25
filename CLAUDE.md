@@ -39,6 +39,7 @@ rollhook/
           schema.ts                # TypeBox schema for server config
       server.ts                    # Entry — .listen(7700)
       rollhook.config.example.yaml
+    marketing/                       # @rollhook/marketing — Astro marketing site (port 4321)
   packages/
     rollhook/                # rollhook — public NPM package
       src/
@@ -128,10 +129,11 @@ bun run lint:fix    # Fix + format
 
 ## Workspace Package Names
 
-| Directory           | Package Name       |
-| ------------------- | ------------------ |
-| `apps/server`       | `@rollhook/server` |
-| `packages/rollhook` | `rollhook`         |
+| Directory           | Package Name          |
+| ------------------- | --------------------- |
+| `apps/server`       | `@rollhook/server`    |
+| `apps/marketing`    | `@rollhook/marketing` |
+| `packages/rollhook` | `rollhook`            |
 
 ---
 

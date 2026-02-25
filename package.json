@@ -10,9 +10,9 @@
   "packageManager": "bun@1.3.9",
   "scripts": {
     "prepare": "lefthook install",
-    "dev": "NODE_ENV=development bun --watch apps/server/server.ts & cd apps/web && bun run dev",
+    "dev": "NODE_ENV=development bun --watch apps/server/server.ts & cd apps/marketing && bun run dev",
     "dev:server": "NODE_ENV=development bun --watch apps/server/server.ts",
-    "dev:web": "cd apps/web && bun run dev",
+    "dev:marketing": "cd apps/marketing && bun run dev",
     "typecheck": "bun run --filter '*' typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
