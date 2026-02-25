@@ -1,0 +1,10 @@
+node_modules
+**/node_modules
+.git
+data
+.env
+e2e/rollhook.config.yaml
+**/*.test.ts
+**/__tests__
+e2e
+.github
