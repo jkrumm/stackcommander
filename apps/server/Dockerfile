@@ -1,14 +1,3 @@
-FROM oven/bun:1.3.9-slim AS deps
-WORKDIR /app
-
-COPY package.json bun.lock ./
-COPY apps/server/package.json ./apps/server/package.json
-COPY apps/marketing/package.json ./apps/marketing/package.json
-COPY packages/rollhook/package.json ./packages/rollhook/package.json
-COPY e2e/package.json ./e2e/package.json
-RUN --mount=type=cache,target=/root/.bun/install/cache \
-    bun install --frozen-lockfile --production --ignore-scripts
-
 # Download Docker CLI static binary + docker-rollout in a throw-away stage.
 # Static binaries work on any Linux regardless of libc version.
 FROM alpine:3.21 AS tool-downloader
@@ -28,7 +17,14 @@ COPY --from=tool-downloader /usr/local/bin/docker-rollout /usr/local/lib/docker/
 
 ENV NODE_ENV=production
 
-COPY --from=deps /app/node_modules ./node_modules
+COPY package.json bun.lock ./
+COPY apps/server/package.json ./apps/server/package.json
+COPY apps/marketing/package.json ./apps/marketing/package.json
+COPY packages/rollhook/package.json ./packages/rollhook/package.json
+COPY e2e/package.json ./e2e/package.json
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --frozen-lockfile --production --ignore-scripts
+
 COPY packages/rollhook ./packages/rollhook
 COPY apps/server ./apps/server
 COPY tsconfig.json ./
