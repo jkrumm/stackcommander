@@ -1,5 +1,5 @@
 import { Elysia, t } from 'elysia'
-import { loadConfig } from '@/config/loader'
+import { loadConfig, saveConfig } from '@/config/loader'
 import { listJobs } from '@/db/jobs'
 import { requireRole } from '@/middleware/auth'
 
@@ -19,7 +19,6 @@ export const registryApi = new Elysia({ prefix: '/registry' })
   }, {
     detail: { tags: ['Registry'], summary: 'List registered apps with last deploy info' },
   })
-  // TODO: persist changes to rollhook.config.yaml — currently in-memory only (lost on restart)
   .patch('/:app', ({ params, body, set }) => {
     const config = loadConfig()
     const appConfig = config.apps.find(a => a.name === params.app)
@@ -31,11 +30,13 @@ export const registryApi = new Elysia({ prefix: '/registry' })
     if (body.compose_path)
       appConfig.compose_path = body.compose_path
 
+    saveConfig()
+
     return { name: appConfig.name, compose_path: appConfig.compose_path }
   }, {
     params: t.Object({ app: t.String() }),
     body: t.Object({
       compose_path: t.Optional(t.String()),
     }),
-    detail: { tags: ['Registry'], summary: 'Update app config (in-memory only until restart)' },
+    detail: { tags: ['Registry'], summary: 'Update app config' },
   })

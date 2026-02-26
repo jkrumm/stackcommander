@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { adminHeaders, BASE_URL } from '../setup/fixtures.ts'
+
+const E2E_DIR = join(fileURLToPath(new URL('.', import.meta.url)), '..')
 
 describe('registry API', () => {
   it('lists hello-world with compose_path and steps', async () => {
@@ -38,6 +43,28 @@ describe('registry API', () => {
     expect(body.compose_path).toBe('/tmp/test-path/compose.yml')
 
     // Restore original path to avoid breaking subsequent deploy tests
+    await fetch(`${BASE_URL}/registry/hello-world`, {
+      method: 'PATCH',
+      headers: adminHeaders(),
+      body: JSON.stringify({ compose_path: originalPath }),
+    })
+  })
+
+  it('patching compose_path persists to config file', async () => {
+    const listRes = await fetch(`${BASE_URL}/registry`, { headers: adminHeaders() })
+    const apps = await listRes.json() as Array<{ name: string, compose_path: string }>
+    const originalPath = apps.find(a => a.name === 'hello-world')!.compose_path
+
+    await fetch(`${BASE_URL}/registry/hello-world`, {
+      method: 'PATCH',
+      headers: adminHeaders(),
+      body: JSON.stringify({ compose_path: '/tmp/persist-test/compose.yml' }),
+    })
+
+    const yaml = readFileSync(join(E2E_DIR, 'rollhook.config.yaml'), 'utf-8')
+    expect(yaml).toContain('/tmp/persist-test/compose.yml')
+
+    // Restore
     await fetch(`${BASE_URL}/registry/hello-world`, {
       method: 'PATCH',
       headers: adminHeaders(),

@@ -1,5 +1,5 @@
 import type { ServerConfig } from 'rollhook'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { Value } from '@sinclair/typebox/value'
@@ -24,4 +24,11 @@ export function loadConfig(): ServerConfig {
 
   cached = parsed as ServerConfig
   return cached
+}
+
+export function saveConfig(): void {
+  if (!cached)
+    throw new Error('Cannot save config before it has been loaded')
+
+  writeFileSync(CONFIG_PATH, yaml.dump(cached), 'utf-8')
 }
