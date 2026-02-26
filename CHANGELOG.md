@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/jkrumm/rollhook/compare/v1.1.0...v1.1.1) (2026-02-26)
+
+
+### Bug Fixes
+
+* **docker:** run bun install in runner stage to fix broken symlinks ([37efe65](https://github.com/jkrumm/rollhook/commit/37efe65e7ec1f09d510fcc7c56e304b23911a76f))
+
 # [1.1.0](https://github.com/jkrumm/rollhook/compare/v1.0.8...v1.1.0) (2026-02-26)
 
 
