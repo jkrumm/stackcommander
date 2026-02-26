@@ -276,6 +276,40 @@ Notification failures are written to the job log — they never affect job statu
 
 ---
 
+## Security
+
+### Threat model
+
+RollHook mounts `/var/run/docker.sock`, which gives it effective root access on the Docker host. A compromised `WEBHOOK_TOKEN` means an attacker can trigger arbitrary deployments with any image tag — treat it with the same sensitivity as an SSH private key.
+
+### Token generation
+
+Generate strong tokens with:
+
+```bash
+openssl rand -hex 32
+```
+
+### HTTPS required
+
+Never expose port 7700 directly to the internet. Always place RollHook behind a reverse proxy with TLS termination — Cloudflare Tunnel, Caddy, Traefik, or nginx. Plaintext HTTP exposes your bearer token on every request.
+
+### Admin endpoint scope
+
+`ADMIN_TOKEN` should never leave the server — it has full API access including job logs and registry mutation. If you run behind a reverse proxy, consider blocking `/jobs`, `/registry`, and `/openapi` from external networks and only exposing `/deploy` and `/health` to CI.
+
+`WEBHOOK_TOKEN` is the only credential that needs to exist in CI secrets. It is scoped to `POST /deploy/:app` only.
+
+### Bun baseline image
+
+The Docker image uses `oven/bun:1.3.9-slim` (the x86_64 baseline variant) intentionally. This ensures compatibility across older x86_64 hardware without AVX2. Modern CPUs incur no meaningful performance difference for this workload.
+
+### Future
+
+HMAC-SHA256 webhook signature verification (`X-Hub-Signature-256`) is planned as an optional hardening layer once a native GitHub Actions workflow is provided. This will let callers sign the exact payload with a shared secret, adding defense-in-depth against token-only leakage.
+
+---
+
 ## Volume Mounts (when running in Docker)
 
 | Path                        | Purpose                                            |
