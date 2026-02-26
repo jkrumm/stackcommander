@@ -53,6 +53,15 @@ async function executeJob(job: { jobId: string, app: string, imageTag: string })
 
 setProcessor(executeJob)
 
+export async function waitForJob(jobId: string): Promise<JobResult> {
+  while (true) {
+    const job = getJob(jobId)
+    if (job && (job.status === 'success' || job.status === 'failed'))
+      return job
+    await new Promise(r => setTimeout(r, 500))
+  }
+}
+
 export function scheduleJob(app: string, imageTag: string): JobResult {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
