@@ -31,7 +31,7 @@ describe('zero-downtime rolling deployment', () => {
 
   it('deploys v2 without dropping requests', async () => {
     // Trigger v2 deployment — RollHook writes IMAGE_TAG to .env before rollout
-    const deployRes = await fetch(`${BASE_URL}/deploy/hello-world`, {
+    const deployRes = await fetch(`${BASE_URL}/deploy/hello-world?async=true`, {
       method: 'POST',
       headers: webhookHeaders(),
       body: JSON.stringify({ image_tag: IMAGE_V2 }),
