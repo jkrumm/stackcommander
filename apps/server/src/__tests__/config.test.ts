@@ -1,5 +1,5 @@
-import { Value } from '@sinclair/typebox/value'
 import { describe, expect, it } from 'bun:test'
+import { Value } from '@sinclair/typebox/value'
 import { ServerConfigSchema } from 'rollhook'
 
 // Tests Value.Check() directly to avoid the module-level cache in loadConfig()
