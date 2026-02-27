@@ -124,6 +124,7 @@ jobs:
           context: .
           file: apps/server/Dockerfile
           push: true
+          build-args: VERSION=${{ needs.release.outputs.version }}
           tags: |
             registry.jkrumm.com/rollhook:${{ needs.release.outputs.version }}
             registry.jkrumm.com/rollhook:latest

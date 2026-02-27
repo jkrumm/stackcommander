@@ -3,7 +3,7 @@
 **Zero-downtime rolling Docker Compose deployments via webhooks.**
 
 [![npm](https://img.shields.io/npm/v/rollhook)](https://www.npmjs.com/package/rollhook)
-[![Docker](https://img.shields.io/badge/docker-ghcr.io%2Fjkrumm%2Frollhook-blue)](https://ghcr.io/jkrumm/rollhook)
+[![Docker](https://img.shields.io/badge/docker-registry.jkrumm.com%2Frollhook-blue)](https://registry.jkrumm.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
@@ -63,24 +63,62 @@ RollHook runs alongside your existing reverse proxy — Caddy, Traefik, nginx, o
 
 ### 1. Run RollHook
 
+The recommended setup uses a [socket proxy](https://github.com/Tecnativa/docker-socket-proxy) to limit Docker socket exposure. RollHook communicates with Docker via `DOCKER_HOST=tcp://socket-proxy:2375` instead of a direct socket mount — no host path dependency, no distro-specific plugin paths.
+
 ```yaml
 # docker-compose.yml (on your VPS)
 services:
-  rollhook:
-    image: ghcr.io/jkrumm/rollhook:latest
-    ports:
-      - '7700:7700'
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      SERVICES: 1
+      IMAGES: 1
+      INFO: 1
+      POST: 1 # required: RollHook issues write operations (scale, pull)
     volumes:
-      - ./rollhook.config.yaml:/app/rollhook.config.yaml:ro
-      - ./data:/app/data
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - socket-proxy-net
+
+  rollhook:
+    image: registry.jkrumm.com/rollhook:latest
+    restart: unless-stopped
+    depends_on:
+      - socket-proxy
     environment:
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       WEBHOOK_TOKEN: ${WEBHOOK_TOKEN}
+      DOCKER_HOST: tcp://socket-proxy:2375
       # Optional: Pushover mobile notifications
       # PUSHOVER_USER_KEY: ${PUSHOVER_USER_KEY}
       # PUSHOVER_APP_TOKEN: ${PUSHOVER_APP_TOKEN}
+    volumes:
+      - ./rollhook.config.yaml:/app/rollhook.config.yaml:ro
+      - rollhook-data:/app/data
+      # Mount one directory per deployed app (read-only):
+      # - /srv/stacks/my-api:/srv/stacks/my-api:ro
+    networks:
+      - socket-proxy-net
+      - proxy # your reverse proxy network
+
+networks:
+  socket-proxy-net:
+    internal: true # isolated — only rollhook can reach socket-proxy
+  proxy:
+    external: true
+
+volumes:
+  rollhook-data:
 ```
+
+> **Minimal alternative:** replace the socket proxy with a direct socket mount and remove the `socket-proxy` service and `socket-proxy-net` network. Simpler, but gives RollHook full Docker socket access. See [Security](#security) for the threat model.
+>
+> ```yaml
+> volumes:
+>   - /var/run/docker.sock:/var/run/docker.sock
+> ```
 
 ### 2. Configure apps
 
@@ -233,16 +271,16 @@ See [`examples/bun-hello-world/`](examples/bun-hello-world/) for a complete work
 
 Interactive docs at `/openapi` (Scalar UI). Key routes:
 
-| Method  | Route            | Auth           | Description                                    |
-| ------- | ---------------- | -------------- | ---------------------------------------------- |
-| `POST`  | `/deploy/:app`   | webhook, admin | Trigger rolling deployment                     |
-| `GET`   | `/jobs/:id`      | admin          | Job status + metadata                          |
-| `GET`   | `/jobs/:id/logs` | admin          | SSE log stream                                 |
-| `GET`   | `/jobs`          | admin          | Paginated job history (`?app=&status=&limit=`) |
-| `GET`   | `/registry`      | admin          | All registered apps + last deploy              |
-| `PATCH` | `/registry/:app` | admin          | Update app config at runtime                   |
-| `GET`   | `/health`        | none           | Liveness check                                 |
-| `GET`   | `/openapi`       | none           | Scalar API docs                                |
+| Method  | Route            | Auth           | Description                                                                                                  |
+| ------- | ---------------- | -------------- | ------------------------------------------------------------------------------------------------------------ |
+| `POST`  | `/deploy/:app`   | webhook, admin | Trigger rolling deployment                                                                                   |
+| `GET`   | `/jobs/:id`      | admin          | Job status + metadata                                                                                        |
+| `GET`   | `/jobs/:id/logs` | admin          | SSE log stream                                                                                               |
+| `GET`   | `/jobs`          | admin          | Paginated job history (`?app=&status=&limit=`)                                                               |
+| `GET`   | `/registry`      | admin          | All registered apps + last deploy                                                                            |
+| `PATCH` | `/registry/:app` | admin          | Update app config at runtime                                                                                 |
+| `GET`   | `/health`        | none           | Returns `200 { "status": "ok", "version": "1.2.3" }` — suitable for Uptime Kuma, Traefik health checks, etc. |
+| `GET`   | `/openapi`       | none           | Scalar API docs                                                                                              |
 
 **Auth:** `Authorization: Bearer <token>` header.
 
@@ -270,13 +308,15 @@ Notification failures are written to the job log — they never affect job statu
 
 ## Environment Variables
 
-| Variable               | Required | Description                                                           |
-| ---------------------- | -------- | --------------------------------------------------------------------- |
-| `ADMIN_TOKEN`          | yes      | Bearer token for admin API access                                     |
-| `WEBHOOK_TOKEN`        | yes      | Bearer token for deploy webhook calls                                 |
-| `ROLLHOOK_CONFIG_PATH` | no       | Absolute path to config file (default: `rollhook.config.yaml` in CWD) |
-| `PUSHOVER_USER_KEY`    | no       | Pushover user key for mobile notifications                            |
-| `PUSHOVER_APP_TOKEN`   | no       | Pushover app token for mobile notifications                           |
+| Variable               | Required | Description                                                                                     |
+| ---------------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `ADMIN_TOKEN`          | yes      | Bearer token for admin API access                                                               |
+| `WEBHOOK_TOKEN`        | yes      | Bearer token for deploy webhook calls                                                           |
+| `DOCKER_HOST`          | no       | Docker daemon endpoint (e.g. `tcp://socket-proxy:2375`). Defaults to the local socket if unset. |
+| `PORT`                 | no       | Port to listen on (default: `7700`)                                                             |
+| `ROLLHOOK_CONFIG_PATH` | no       | Absolute path to config file (default: `rollhook.config.yaml` in CWD)                           |
+| `PUSHOVER_USER_KEY`    | no       | Pushover user key for mobile notifications                                                      |
+| `PUSHOVER_APP_TOKEN`   | no       | Pushover app token for mobile notifications                                                     |
 
 ---
 
@@ -284,7 +324,24 @@ Notification failures are written to the job log — they never affect job statu
 
 ### Threat model
 
-RollHook mounts `/var/run/docker.sock`, which gives it effective root access on the Docker host. A compromised `WEBHOOK_TOKEN` means an attacker can trigger arbitrary deployments with any image tag — treat it with the same sensitivity as an SSH private key.
+When using a direct socket mount, RollHook has effective root access on the Docker host via `/var/run/docker.sock`. A compromised `WEBHOOK_TOKEN` means an attacker can trigger arbitrary deployments with any image tag — treat it with the same sensitivity as an SSH private key.
+
+### Docker socket access
+
+**Recommended: socket proxy**
+
+Use [Tecnativa's docker-socket-proxy](https://github.com/Tecnativa/docker-socket-proxy) to restrict Docker API access to only the operations RollHook requires. Set `DOCKER_HOST=tcp://socket-proxy:2375` on RollHook and isolate the proxy on an internal network. Required permissions: `CONTAINERS=1 SERVICES=1 IMAGES=1 INFO=1 POST=1`.
+
+This approach also eliminates the distro-specific CLI plugin path problem: with `DOCKER_HOST` set, RollHook uses the Docker CLI bundled in the image to connect over TCP — no host bind mounts for docker-compose or docker-rollout needed.
+
+**Alternative: direct socket mount**
+
+```yaml
+volumes:
+  - /var/run/docker.sock:/var/run/docker.sock
+```
+
+Simpler to configure but gives RollHook unrestricted Docker access. Acceptable for single-tenant VPS setups where the threat model is primarily external. The socket proxy is the better default for anything production-facing.
 
 ### Token generation
 
@@ -316,11 +373,12 @@ HMAC-SHA256 webhook signature verification (`X-Hub-Signature-256`) is planned as
 
 ## Volume Mounts (when running in Docker)
 
-| Path                        | Purpose                                            |
-| --------------------------- | -------------------------------------------------- |
-| `/app/rollhook.config.yaml` | Server config (mount as read-only)                 |
-| `/app/data`                 | SQLite DB + job logs (persist across restarts)     |
-| `/var/run/docker.sock`      | Docker socket (required for deployment operations) |
+| Path                        | Purpose                                                                             |
+| --------------------------- | ----------------------------------------------------------------------------------- |
+| `/app/rollhook.config.yaml` | Server config (mount as read-only)                                                  |
+| `/app/data`                 | SQLite DB + job logs (persist across restarts)                                      |
+| `/var/run/docker.sock`      | Docker socket — only when using direct socket mount (not needed with `DOCKER_HOST`) |
+| `/host/path/to/app`         | App compose file directories (one read-only mount per deployed app)                 |
 
 ---
 
@@ -402,8 +460,8 @@ The following scenarios are not covered by the current test suite. They are trac
 - [x] `rollhook` npm package (TypeBox schemas + TS types, JSON Schema via jsDelivr CDN)
 - [x] `rollhook.config.yaml` loading + validation
 - [x] Example app with correct compose, healthcheck, and graceful shutdown
-- [ ] Public Docker image: `ghcr.io/jkrumm/rollhook`
-- [ ] `examples/infra/` — reference `compose.infra.yml` (Traefik + Alloy + RollHook)
+- [x] Public Docker image: `registry.jkrumm.com/rollhook`
+- [x] `examples/infra/` — reference `compose.infra.yml` (Traefik + RollHook + socket proxy)
 
 ### Post-MVP
 

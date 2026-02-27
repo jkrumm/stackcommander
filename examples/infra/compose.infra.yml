@@ -43,7 +43,7 @@ services:
       - socket-proxy-net
     logging:
       driver: json-file
-      options: { max-size: "5m", max-file: "2" }
+      options: {max-size: 5m, max-file: '2'}
 
   # ---------------------------------------------------------------------------
   # Traefik — TLS termination + reverse proxy.
@@ -58,11 +58,11 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     environment:
       - DOCKER_HOST=tcp://socket-proxy:2375
-      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}   # remove if not using Cloudflare DNS challenge
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN} # remove if not using Cloudflare DNS challenge
     volumes:
       - ./config/traefik/traefik.yml:/traefik.yml:ro
       - ./config/traefik/dynamic.yml:/dynamic.yml:ro
@@ -72,7 +72,7 @@ services:
       - socket-proxy-net
     logging:
       driver: json-file
-      options: { max-size: "10m", max-file: "3" }
+      options: {max-size: 10m, max-file: '3'}
 
   # ---------------------------------------------------------------------------
   # Socket proxy for RollHook — write access (POST=1) for rolling deployments.
@@ -96,7 +96,7 @@ services:
       - socket-proxy-rollhook-net
     logging:
       driver: json-file
-      options: { max-size: "5m", max-file: "2" }
+      options: {max-size: 5m, max-file: '2'}
 
   # ---------------------------------------------------------------------------
   # RollHook — zero-downtime rolling deployments via webhook.
@@ -133,19 +133,19 @@ services:
       start_period: 10s
       retries: 3
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.rollhook.rule=Host(`rollhook.<your-domain>`)"
-      - "traefik.http.routers.rollhook.entrypoints=websecure"
-      - "traefik.http.routers.rollhook.tls.certresolver=letsencrypt"
-      - "traefik.http.services.rollhook.loadbalancer.server.port=7700"
-      - "traefik.http.services.rollhook.loadbalancer.healthcheck.path=/health"
-      - "traefik.http.services.rollhook.loadbalancer.healthcheck.interval=5s"
+      - traefik.enable=true
+      - traefik.http.routers.rollhook.rule=Host(`rollhook.<your-domain>`)
+      - traefik.http.routers.rollhook.entrypoints=websecure
+      - traefik.http.routers.rollhook.tls.certresolver=letsencrypt
+      - traefik.http.services.rollhook.loadbalancer.server.port=7700
+      - traefik.http.services.rollhook.loadbalancer.healthcheck.path=/health
+      - traefik.http.services.rollhook.loadbalancer.healthcheck.interval=5s
     networks:
       - proxy
       - socket-proxy-rollhook-net
     logging:
       driver: json-file
-      options: { max-size: "10m", max-file: "3" }
+      options: {max-size: 10m, max-file: '3'}
 
 networks:
   proxy:

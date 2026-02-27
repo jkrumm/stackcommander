@@ -4,18 +4,23 @@ FROM alpine:3.21 AS tool-downloader
 RUN apk add --no-cache curl \
   && curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-27.5.1.tgz" \
      | tar xz --strip-components=1 -C /usr/local/bin docker/docker \
+  && curl -fsSL "https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-x86_64" \
+     -o /usr/local/bin/docker-compose-plugin \
   && curl -fsSL "https://github.com/wowu/docker-rollout/releases/download/v0.13/docker-rollout" \
      -o /usr/local/bin/docker-rollout \
-  && chmod +x /usr/local/bin/docker-rollout
+  && chmod +x /usr/local/bin/docker-compose-plugin /usr/local/bin/docker-rollout
 
 FROM oven/bun:1.3.9-slim AS runner
 WORKDIR /app
 
 COPY --from=tool-downloader /usr/local/bin/docker /usr/local/bin/docker
 RUN mkdir -p /usr/local/lib/docker/cli-plugins
+COPY --from=tool-downloader /usr/local/bin/docker-compose-plugin /usr/local/lib/docker/cli-plugins/docker-compose
 COPY --from=tool-downloader /usr/local/bin/docker-rollout /usr/local/lib/docker/cli-plugins/docker-rollout
 
+ARG VERSION=dev
 ENV NODE_ENV=production
+ENV VERSION=$VERSION
 
 COPY package.json bun.lock ./
 COPY apps/server/package.json ./apps/server/package.json
