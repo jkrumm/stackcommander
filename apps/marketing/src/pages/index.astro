@@ -49,6 +49,32 @@ networks:
   title="RollHook — Zero-downtime rolling Docker Compose deployments via webhooks"
   description="Webhook-triggered rolling deployments for Docker Compose on VPS. Self-hosted, infra-as-code, integrates with GitHub Actions in minutes."
 >
+  <script
+    is:inline
+    type="application/ld+json"
+    set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      'name': 'RollHook',
+      'description':
+        'Webhook-triggered rolling deployments for Docker Compose on VPS. Self-hosted, infra-as-code, integrates with GitHub Actions in minutes.',
+      'url': 'https://rollhook.com',
+      'applicationCategory': 'DeveloperApplication',
+      'operatingSystem': 'Linux',
+      'offers': {
+        '@type': 'Offer',
+        'price': '0',
+        'priceCurrency': 'USD',
+      },
+      'author': {
+        '@type': 'Person',
+        'name': 'Johannes Krumm',
+        'url': 'https://github.com/jkrumm',
+      },
+      'codeRepository': 'https://github.com/jkrumm/rollhook',
+      'license': 'https://github.com/jkrumm/rollhook/blob/master/LICENSE',
+    })}
+  />
   <div class="min-h-screen flex flex-col">
     <main class="flex-1">
       <!-- Hero -->
