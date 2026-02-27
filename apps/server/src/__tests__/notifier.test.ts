@@ -1,8 +1,8 @@
-import type { JobResult } from 'rollhook'
-import { afterAll, afterEach, beforeAll, describe, expect, it, mock, spyOn } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { JobResult } from 'rollhook'
+import { afterAll, afterEach, beforeAll, describe, expect, it, mock, spyOn } from 'bun:test'
 
 // Mutable config object — tests mutate .notifications and env vars per-test
 const mockConfig: {
@@ -15,6 +15,7 @@ const mockConfig: {
 // Register mock before notifier is imported (mock.module must precede import)
 mock.module('@/config/loader', () => ({
   loadConfig: () => mockConfig,
+  saveConfig: () => {}, // not used by notifier, but required for module interface
 }))
 
 let notify: (job: JobResult, logPath: string) => Promise<void>
