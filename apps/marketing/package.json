@@ -16,7 +16,7 @@
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@resvg/resvg-js": "^2.6.2",
     "astro": "^5.17.3",
-    "basalt-ui": "^0.2.1",
+    "basalt-ui": "0.2.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fontaine": "^0.8.0",

@@ -11,7 +11,7 @@ import satori from 'satori'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const bunStore = resolve(__dirname, '../../../node_modules/.bun')
 
-function findFontFile(pkgPrefix: string, filename: string): Buffer {
+function findFontFile(pkgPrefix: string, filename: string) {
   const dirs = readdirSync(bunStore)
   const dir = dirs.find(d => d.startsWith(pkgPrefix))
   if (!dir)
