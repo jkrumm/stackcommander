@@ -63,13 +63,13 @@ export const jobsApi = new Elysia({ prefix: '/jobs' })
     return listJobs({
       app: query.app,
       status: query.status,
-      limit: query.limit ? Number(query.limit) : 50,
+      limit: query.limit ?? 50,
     })
   }, {
     query: t.Object({
       app: t.Optional(t.String()),
       status: t.Optional(JobStatusSchema),
-      limit: t.Optional(t.String()),
+      limit: t.Optional(t.Numeric()),
     }),
     detail: { tags: ['Jobs'], summary: 'List jobs with optional filters' },
   })

@@ -18,13 +18,15 @@ describe('registry API', () => {
     expect(helloWorld!.steps[0]!.service).toBe('hello-world')
   })
 
-  it('includes last_deploy field', async () => {
+  it('last_deploy is populated after prior deploys have completed', async () => {
     const res = await fetch(`${BASE_URL}/registry`, { headers: adminHeaders() })
-    const apps = await res.json() as Array<{ name: string, last_deploy: unknown }>
+    const apps = await res.json() as Array<{ name: string, last_deploy: Record<string, unknown> | null }>
     const helloWorld = apps.find(a => a.name === 'hello-world')
-    // May be null (no deploys yet) or a job object if auth tests already deployed
-    expect(helloWorld).toBeDefined()
-    expect(helloWorld).toHaveProperty('last_deploy')
+    // By the time registry tests run, multiple deploys have completed across earlier test files —
+    // last_deploy must be a job object with a terminal status (success or failed), not null.
+    expect(helloWorld?.last_deploy).not.toBeNull()
+    expect(['success', 'failed']).toContain(helloWorld?.last_deploy?.status)
+    expect(helloWorld?.last_deploy?.app).toBe('hello-world')
   })
 
   it('patching compose_path returns updated value', async () => {
@@ -63,6 +65,30 @@ describe('registry API', () => {
 
     const yaml = readFileSync(join(E2E_DIR, 'rollhook.config.yaml'), 'utf-8')
     expect(yaml).toContain('/tmp/persist-test/compose.yml')
+
+    // Restore
+    await fetch(`${BASE_URL}/registry/hello-world`, {
+      method: 'PATCH',
+      headers: adminHeaders(),
+      body: JSON.stringify({ compose_path: originalPath }),
+    })
+  })
+
+  it('patching an app reflects change in subsequent GET /registry', async () => {
+    const listRes = await fetch(`${BASE_URL}/registry`, { headers: adminHeaders() })
+    const apps = await listRes.json() as Array<{ name: string, compose_path: string }>
+    const originalPath = apps.find(a => a.name === 'hello-world')!.compose_path
+
+    await fetch(`${BASE_URL}/registry/hello-world`, {
+      method: 'PATCH',
+      headers: adminHeaders(),
+      body: JSON.stringify({ compose_path: '/tmp/verify-reflection/compose.yml' }),
+    })
+
+    const verifyRes = await fetch(`${BASE_URL}/registry`, { headers: adminHeaders() })
+    const updatedApps = await verifyRes.json() as Array<{ name: string, compose_path: string }>
+    const updated = updatedApps.find(a => a.name === 'hello-world')
+    expect(updated?.compose_path).toBe('/tmp/verify-reflection/compose.yml')
 
     // Restore
     await fetch(`${BASE_URL}/registry/hello-world`, {

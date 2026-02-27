@@ -1,36 +1,50 @@
 import { execSync } from 'node:child_process'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { adminHeaders, BASE_URL, pollJobUntilDone, REGISTRY_HOST, TRAEFIK_URL, webhookHeaders } from '../setup/fixtures.ts'
 
 const IMAGE_V1 = `${REGISTRY_HOST}/rollhook-e2e-hello:v1`
 const IMAGE_V2 = `${REGISTRY_HOST}/rollhook-e2e-hello:v2`
 
+function getContainerCount(): number {
+  try {
+    const output = execSync(
+      'docker ps --filter name=bun-hello-world-hello-world --format "{{.Names}}"',
+      { encoding: 'utf-8' },
+    ).trim()
+    return output ? output.split('\n').filter(Boolean).length : 0
+  }
+  catch {
+    return 0
+  }
+}
+
 beforeAll(async () => {
-  // Ensure we're starting from a clean v1 state — RollHook writes .env automatically
+  // Ensure we're starting from a clean v1 state before the zero-downtime tests run.
+  // The synchronous deploy blocks until complete, so we know v1 is fully up when tests begin.
   const res = await fetch(`${BASE_URL}/deploy/hello-world`, {
     method: 'POST',
     headers: adminHeaders(),
     body: JSON.stringify({ image_tag: IMAGE_V1 }),
   })
-  const { job_id } = await res.json() as { job_id: string }
-  const job = await pollJobUntilDone(job_id)
-  expect(job.status).toBe('success')
+  expect(res.status).toBe(200)
+  const body = await res.json() as { status: string }
+  expect(body.status).toBe('success')
 }, 120_000)
 
-afterAll(() => {
-  // Nothing to clean up — RollHook manages .env
-})
-
 describe('zero-downtime rolling deployment', () => {
-  it('v1 is running before deployment', async () => {
+  it('v1 is running and accessible before deployment', async () => {
     const res = await fetch(`${TRAEFIK_URL}/version`)
     expect(res.status).toBe(200)
     const body = await res.json() as { version: string }
     expect(body.version).toBe('v1')
   })
 
+  it('exactly one container is running before deployment', () => {
+    expect(getContainerCount()).toBe(1)
+  })
+
   it('deploys v2 without dropping requests', async () => {
-    // Trigger v2 deployment asynchronously so the poller runs concurrently with rollout
+    // Trigger v2 deployment asynchronously so the traffic poller runs concurrently with rollout
     const deployRes = await fetch(`${BASE_URL}/deploy/hello-world?async=true`, {
       method: 'POST',
       headers: webhookHeaders(),
@@ -39,13 +53,14 @@ describe('zero-downtime rolling deployment', () => {
     expect(deployRes.status).toBe(200)
     const { job_id } = await deployRes.json() as { job_id: string }
 
-    // Hammer the version endpoint every 50ms while deployment runs
     const errors: string[] = []
     const versions: string[] = []
-    let maxContainerCount = 0
-    let minContainerCount = Number.POSITIVE_INFINITY
+    const initialContainerCount = getContainerCount()
+    let maxContainerCount = initialContainerCount
+    let minContainerCount = initialContainerCount
 
-    // Version poller — checks for HTTP errors (zero-downtime assertion)
+    // Version poller: sends a request every 50ms and records any HTTP errors.
+    // Any non-2xx response during rollout means downtime.
     const versionPoller = setInterval(async () => {
       try {
         const res = await fetch(`${TRAEFIK_URL}/version`)
@@ -61,40 +76,39 @@ describe('zero-downtime rolling deployment', () => {
       }
     }, 50)
 
-    // Container count poller — verifies at most 2 instances and never 0 during rollout
+    // Container count poller: verifies at most 2 instances and never 0 during rollout.
     const containerPoller = setInterval(() => {
-      try {
-        const output = execSync(
-          'docker ps --filter name=bun-hello-world-hello-world --format "{{.Names}}"',
-          { encoding: 'utf-8' },
-        ).trim()
-        const count = output ? output.split('\n').filter(Boolean).length : 0
-        maxContainerCount = Math.max(maxContainerCount, count)
-        if (count > 0)
-          minContainerCount = Math.min(minContainerCount, count)
-      }
-      catch {
-        // ignore transient docker ps errors
-      }
+      const count = getContainerCount()
+      maxContainerCount = Math.max(maxContainerCount, count)
+      minContainerCount = Math.min(minContainerCount, count)
     }, 250)
 
     const job = await pollJobUntilDone(job_id, 90_000)
-    clearInterval(versionPoller)
     clearInterval(containerPoller)
 
-    // Wait a tick to collect any in-flight responses
+    // Wait for Traefik to discover the new container and update routing.
+    // Docker rollout completes when the container is healthy at the Docker level,
+    // but Traefik needs an additional healthcheck interval (~1s) to start routing.
+    await new Promise(resolve => setTimeout(resolve, 3_000))
+
+    clearInterval(versionPoller)
+    // Flush any in-flight responses before asserting
     await new Promise(resolve => setTimeout(resolve, 300))
 
-    // Zero-downtime: no HTTP errors, saw both versions, container count stayed in bounds
     expect(job.status).toBe('success')
+
+    // Zero-downtime: no HTTP errors during the entire rollout
     expect(errors).toHaveLength(0)
+
+    // Both versions must have been observed: v1 at start, v2 after switchover
     expect(versions.includes('v1')).toBe(true)
     expect(versions.includes('v2')).toBe(true)
-    // Rolling deployment: always at least 1 container serving, never more than 2 simultaneously
+
+    // Rolling deployment invariant: always ≥1 container serving, never >2 simultaneously
     expect(minContainerCount).toBeGreaterThanOrEqual(1)
     expect(maxContainerCount).toBeLessThanOrEqual(2)
 
-    // Job logs must contain all three pipeline steps and no executor error
+    // Pipeline logs: all three steps must appear, no executor error
     const logsRes = await fetch(`${BASE_URL}/jobs/${job_id}/logs`, { headers: adminHeaders() })
     expect(logsRes.status).toBe(200)
     const logText = await logsRes.text()
@@ -109,5 +123,10 @@ describe('zero-downtime rolling deployment', () => {
     expect(res.status).toBe(200)
     const body = await res.json() as { version: string }
     expect(body.version).toBe('v2')
+  })
+
+  it('exactly one container is running after deployment', () => {
+    // Rolling update must not leave extra containers behind
+    expect(getContainerCount()).toBe(1)
   })
 })

@@ -20,6 +20,15 @@ export function enqueue(job: QueuedJob): void {
     drain()
 }
 
+export async function waitForQueueDrain(timeoutMs = 5 * 60 * 1000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!running && queue.length === 0)
+      return
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
+}
+
 async function drain(): Promise<void> {
   if (!processor)
     throw new Error('No job processor registered')

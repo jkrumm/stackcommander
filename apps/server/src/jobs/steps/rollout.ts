@@ -1,5 +1,5 @@
-import { appendFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { appendFileSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import process from 'node:process'
 
 // Note: steps always run sequentially (post-MVP: dependency graph)
@@ -11,6 +11,12 @@ export async function rolloutApp(
 ): Promise<void> {
   const log = (line: string) => appendFileSync(logPath, `[${new Date().toISOString()}] ${line}\n`)
   const cwd = dirname(composePath)
+
+  // Write IMAGE_TAG to .env so docker compose uses the correct image.
+  // Docker Compose v2 .env file takes precedence over shell env for compose
+  // variable substitution — without this, IMAGE_TAG from a previous deploy
+  // would persist in .env and override the new value.
+  writeFileSync(join(cwd, '.env'), `IMAGE_TAG=${imageTag}\n`)
 
   for (const step of steps) {
     log(`[rollout] Rolling out service: ${step.service} (IMAGE_TAG=${imageTag})`)
@@ -41,7 +47,7 @@ export async function rolloutApp(
           const { done, value } = await reader.read()
           if (done)
             break
-          log(decoder.decode(value))
+          log(decoder.decode(value, { stream: true }))
         }
       })(),
       new Response(proc.stderr).text(),

@@ -19,7 +19,7 @@ export async function pullImage(imageTag: string, logPath: string): Promise<void
         const { done, value } = await reader.read()
         if (done)
           break
-        log(decoder.decode(value))
+        log(decoder.decode(value, { stream: true }))
       }
     })(),
     new Response(proc.stderr).text(),

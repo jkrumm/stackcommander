@@ -1,7 +1,35 @@
-import { describe, expect, it } from 'vitest'
-import { adminHeaders, BASE_URL, pollJobUntilDone, webhookHeaders } from '../setup/fixtures.ts'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { adminHeaders, BASE_URL, REGISTRY_HOST, webhookHeaders } from '../setup/fixtures.ts'
 
-const IMAGE_V1 = 'localhost:5001/rollhook-e2e-hello:v1'
+const IMAGE_V1 = `${REGISTRY_HOST}/rollhook-e2e-hello:v1`
+const NONEXISTENT_IMAGE = `${REGISTRY_HOST}/rollhook-e2e-hello:no-such-tag`
+
+// One successful deploy (full pipeline → all log prefixes) and one failing deploy
+// (pull fails fast → no rollout log) — gives us fixtures for all jobs API assertions.
+let completedJobId: string
+let failedJobId: string
+
+beforeAll(async () => {
+  // Successful deploy: IMAGE_V1 runs the full pipeline, producing [validate] [pull] [rollout] logs
+  const successRes = await fetch(`${BASE_URL}/deploy/hello-world`, {
+    method: 'POST',
+    headers: webhookHeaders(),
+    body: JSON.stringify({ image_tag: IMAGE_V1 }),
+  })
+  expect(successRes.status).toBe(200)
+  const successBody = await successRes.json() as { job_id: string }
+  completedJobId = successBody.job_id
+
+  // Failed deploy: nonexistent image fails at pull in ~3s, no rollout runs
+  const failRes = await fetch(`${BASE_URL}/deploy/hello-world`, {
+    method: 'POST',
+    headers: adminHeaders(),
+    body: JSON.stringify({ image_tag: NONEXISTENT_IMAGE }),
+  })
+  expect(failRes.status).toBe(500)
+  const failBody = await failRes.json() as { job_id: string }
+  failedJobId = failBody.job_id
+}, 120_000)
 
 describe('jobs API', () => {
   it('unknown job id → 404', async () => {
@@ -11,17 +39,20 @@ describe('jobs API', () => {
     expect(res.status).toBe(404)
   })
 
-  it('/jobs/:id/logs returns SSE stream with log prefixes', async () => {
-    // Trigger a deploy and wait for completion so logs exist
-    const deployRes = await fetch(`${BASE_URL}/deploy/hello-world`, {
-      method: 'POST',
-      headers: webhookHeaders(),
-      body: JSON.stringify({ image_tag: IMAGE_V1 }),
-    })
-    const { job_id } = await deployRes.json() as { job_id: string }
-    await pollJobUntilDone(job_id)
+  it('/jobs/:id returns job with correct fields', async () => {
+    const res = await fetch(`${BASE_URL}/jobs/${completedJobId}`, { headers: adminHeaders() })
+    expect(res.status).toBe(200)
+    const job = await res.json() as Record<string, unknown>
+    expect(job.id).toBe(completedJobId)
+    expect(job.status).toBe('success')
+    expect(job.app).toBe('hello-world')
+    expect(job.image_tag).toBe(IMAGE_V1)
+    expect(job.created_at).toBeTruthy()
+    expect(job.updated_at).toBeTruthy()
+  })
 
-    const logRes = await fetch(`${BASE_URL}/jobs/${job_id}/logs`, { headers: adminHeaders() })
+  it('/jobs/:id/logs returns SSE stream with all pipeline prefixes', async () => {
+    const logRes = await fetch(`${BASE_URL}/jobs/${completedJobId}/logs`, { headers: adminHeaders() })
     expect(logRes.status).toBe(200)
     expect(logRes.headers.get('content-type')).toContain('text/event-stream')
 
@@ -32,10 +63,71 @@ describe('jobs API', () => {
     expect(text).toContain('[rollout]')
   })
 
+  it('failed job logs contain pull error but not rollout', async () => {
+    const logRes = await fetch(`${BASE_URL}/jobs/${failedJobId}/logs`, { headers: adminHeaders() })
+    expect(logRes.status).toBe(200)
+
+    const text = await logRes.text()
+    expect(text).toContain('[pull]')
+    expect(text).toContain('[executor] ERROR:')
+    expect(text).not.toContain('[rollout]')
+  })
+
+  it('/jobs/:id/logs returns 404 for unknown job', async () => {
+    const res = await fetch(`${BASE_URL}/jobs/00000000-0000-0000-0000-000000000000/logs`, {
+      headers: adminHeaders(),
+    })
+    expect(res.status).toBe(404)
+  })
+
   it('limit query param is respected', async () => {
     const res = await fetch(`${BASE_URL}/jobs?limit=1`, { headers: adminHeaders() })
     expect(res.status).toBe(200)
     const jobs = await res.json() as unknown[]
     expect(jobs.length).toBeLessThanOrEqual(1)
+  })
+
+  it('?app filter returns only jobs for that app', async () => {
+    const res = await fetch(`${BASE_URL}/jobs?app=hello-world`, { headers: adminHeaders() })
+    expect(res.status).toBe(200)
+    const jobs = await res.json() as Array<{ app: string, id: string }>
+    expect(jobs.length).toBeGreaterThan(0)
+    for (const j of jobs) expect(j.app).toBe('hello-world')
+    expect(jobs.some(j => j.id === completedJobId)).toBe(true)
+  })
+
+  it('?app=nonexistent returns empty array', async () => {
+    const res = await fetch(`${BASE_URL}/jobs?app=nonexistent-app`, { headers: adminHeaders() })
+    expect(res.status).toBe(200)
+    const jobs = await res.json() as unknown[]
+    expect(jobs).toHaveLength(0)
+  })
+
+  it('?status=success returns only successful jobs', async () => {
+    const res = await fetch(`${BASE_URL}/jobs?status=success`, { headers: adminHeaders() })
+    expect(res.status).toBe(200)
+    const jobs = await res.json() as Array<{ id: string, status: string }>
+    expect(jobs.length).toBeGreaterThan(0)
+    for (const j of jobs) expect(j.status).toBe('success')
+    expect(jobs.some(j => j.id === completedJobId)).toBe(true)
+  })
+
+  it('?status=failed returns only failed jobs', async () => {
+    const res = await fetch(`${BASE_URL}/jobs?status=failed`, { headers: adminHeaders() })
+    expect(res.status).toBe(200)
+    const jobs = await res.json() as Array<{ id: string, status: string }>
+    expect(jobs.length).toBeGreaterThan(0)
+    for (const j of jobs) expect(j.status).toBe('failed')
+    expect(jobs.some(j => j.id === failedJobId)).toBe(true)
+  })
+
+  it('?app and ?status can be combined', async () => {
+    const res = await fetch(`${BASE_URL}/jobs?app=hello-world&status=success`, { headers: adminHeaders() })
+    expect(res.status).toBe(200)
+    const jobs = await res.json() as Array<{ app: string, status: string }>
+    jobs.forEach((j) => {
+      expect(j.app).toBe('hello-world')
+      expect(j.status).toBe('success')
+    })
   })
 })
