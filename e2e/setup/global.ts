@@ -53,6 +53,11 @@ export async function setup(): Promise<void> {
     stdio: 'inherit',
   })
 
+  // Wait for hello-world to be routable through Traefik before starting any tests.
+  // Traefik discovers container labels within ~100ms but needs its healthcheck to pass
+  // before routing. Without this wait, zero-downtime "v1 is running" assertion can fail.
+  await waitForUrl('http://localhost:9080/version', 30_000)
+
   // Generate rollhook.config.yaml with machine-absolute compose_path
   const configPath = join(E2E_DIR, 'rollhook.config.yaml')
   writeFileSync(
@@ -72,8 +77,15 @@ export async function setup(): Promise<void> {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 
+  serverProcess.stdout?.on('data', (chunk: Uint8Array) => {
+    process.stdout.write(chunk)
+  })
   serverProcess.stderr?.on('data', (chunk: Uint8Array) => {
     process.stderr.write(chunk)
+  })
+  serverProcess.on('exit', (code) => {
+    if (code !== null && code !== 0)
+      process.stderr.write(`[global] RollHook server exited with code ${code}\n`)
   })
 
   // Wait for server to be ready
@@ -82,8 +94,19 @@ export async function setup(): Promise<void> {
 
 export async function teardown(): Promise<void> {
   if (serverProcess) {
-    serverProcess.kill()
+    const proc = serverProcess
     serverProcess = null
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        proc.kill('SIGKILL')
+        resolve()
+      }, 6_000)
+      proc.on('exit', () => {
+        clearTimeout(timeout)
+        resolve()
+      })
+      proc.kill()
+    })
   }
 
   execSync(`docker compose --project-directory ${HELLO_WORLD_DIR} down -v`, {

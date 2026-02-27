@@ -53,13 +53,15 @@ async function executeJob(job: { jobId: string, app: string, imageTag: string })
 
 setProcessor(executeJob)
 
-export async function waitForJob(jobId: string): Promise<JobResult> {
-  while (true) {
+export async function waitForJob(jobId: string, timeoutMs = 10 * 60 * 1000): Promise<JobResult> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
     const job = getJob(jobId)
     if (job && (job.status === 'success' || job.status === 'failed'))
       return job
     await new Promise(r => setTimeout(r, 500))
   }
+  throw new Error(`Job ${jobId} did not complete within ${timeoutMs}ms`)
 }
 
 export function scheduleJob(app: string, imageTag: string): JobResult {

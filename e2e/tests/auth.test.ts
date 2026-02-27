@@ -56,4 +56,25 @@ describe('authentication', () => {
     })
     expect(res.status).toBe(401)
   })
+
+  it('/health is accessible without authentication', async () => {
+    const res = await fetch(`${BASE_URL}/health`)
+    expect(res.status).toBe(200)
+  })
+
+  it('webhook token on GET /registry → 403', async () => {
+    const res = await fetch(`${BASE_URL}/registry`, {
+      headers: { Authorization: `Bearer ${WEBHOOK_TOKEN}` },
+    })
+    expect(res.status).toBe(403)
+  })
+
+  it('webhook token on PATCH /registry/:app → 403', async () => {
+    const res = await fetch(`${BASE_URL}/registry/hello-world`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${WEBHOOK_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ compose_path: '/tmp/should-not-apply/compose.yml' }),
+    })
+    expect(res.status).toBe(403)
+  })
 })
