@@ -30,7 +30,7 @@ describe('zero-downtime rolling deployment', () => {
   })
 
   it('deploys v2 without dropping requests', async () => {
-    // Trigger v2 deployment — RollHook writes IMAGE_TAG to .env before rollout
+    // Trigger v2 deployment asynchronously so the poller runs concurrently with rollout
     const deployRes = await fetch(`${BASE_URL}/deploy/hello-world?async=true`, {
       method: 'POST',
       headers: webhookHeaders(),
@@ -39,10 +39,11 @@ describe('zero-downtime rolling deployment', () => {
     expect(deployRes.status).toBe(200)
     const { job_id } = await deployRes.json() as { job_id: string }
 
-    // Hammer the version endpoint every 200ms while deployment runs
+    // Hammer the version endpoint every 50ms while deployment runs
     const errors: string[] = []
     const versions: string[] = []
     let maxContainerCount = 0
+    let minContainerCount = Number.POSITIVE_INFINITY
 
     // Version poller — checks for HTTP errors (zero-downtime assertion)
     const versionPoller = setInterval(async () => {
@@ -58,9 +59,9 @@ describe('zero-downtime rolling deployment', () => {
       catch (err) {
         errors.push(err instanceof Error ? err.message : String(err))
       }
-    }, 200)
+    }, 50)
 
-    // Container count poller — verifies at most 2 instances run simultaneously during rollout
+    // Container count poller — verifies at most 2 instances and never 0 during rollout
     const containerPoller = setInterval(() => {
       try {
         const output = execSync(
@@ -69,11 +70,13 @@ describe('zero-downtime rolling deployment', () => {
         ).trim()
         const count = output ? output.split('\n').filter(Boolean).length : 0
         maxContainerCount = Math.max(maxContainerCount, count)
+        if (count > 0)
+          minContainerCount = Math.min(minContainerCount, count)
       }
       catch {
         // ignore transient docker ps errors
       }
-    }, 500)
+    }, 250)
 
     const job = await pollJobUntilDone(job_id, 90_000)
     clearInterval(versionPoller)
@@ -82,12 +85,23 @@ describe('zero-downtime rolling deployment', () => {
     // Wait a tick to collect any in-flight responses
     await new Promise(resolve => setTimeout(resolve, 300))
 
+    // Zero-downtime: no HTTP errors, saw both versions, container count stayed in bounds
     expect(job.status).toBe('success')
     expect(errors).toHaveLength(0)
     expect(versions.includes('v1')).toBe(true)
     expect(versions.includes('v2')).toBe(true)
-    // Rolling deployment: at most old + new container running simultaneously
+    // Rolling deployment: always at least 1 container serving, never more than 2 simultaneously
+    expect(minContainerCount).toBeGreaterThanOrEqual(1)
     expect(maxContainerCount).toBeLessThanOrEqual(2)
+
+    // Job logs must contain all three pipeline steps and no executor error
+    const logsRes = await fetch(`${BASE_URL}/jobs/${job_id}/logs`, { headers: adminHeaders() })
+    expect(logsRes.status).toBe(200)
+    const logText = await logsRes.text()
+    expect(logText).toContain('[validate]')
+    expect(logText).toContain('[pull]')
+    expect(logText).toContain('[rollout]')
+    expect(logText).not.toContain('[executor] ERROR:')
   })
 
   it('v2 is serving after deployment', async () => {
