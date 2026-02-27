@@ -160,3 +160,16 @@ jobs:
             org.opencontainers.image.revision=${{ steps.meta.outputs.revision }}
           cache-from: type=gha,scope=marketing
           cache-to: type=gha,mode=max,scope=marketing
+
+  deploy:
+    name: Deploy Marketing to VPS
+    needs: [release, docker]
+    if: needs.release.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger RollHook deployment
+        run: |
+          curl -sf -X POST "${{ secrets.ROLLHOOK_URL }}/deploy/rollhook-marketing" \
+            -H "Authorization: Bearer ${{ secrets.ROLLHOOK_WEBHOOK_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"image_tag\": \"registry.jkrumm.com/private/rollhook-marketing:${{ needs.release.outputs.version }}\"}"
