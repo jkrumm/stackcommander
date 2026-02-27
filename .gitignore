@@ -31,6 +31,9 @@ e2e/rollhook.config.yaml
 # E2E generated .env for docker-compose image tag switching
 examples/bun-hello-world/.env
 
+# Lighthouse exports
+*.com-*.json
+
 # Editor
 .vscode/*
 !.vscode/settings.json
