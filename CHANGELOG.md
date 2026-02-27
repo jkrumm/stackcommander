@@ -1,3 +1,17 @@
+# [1.4.0](https://github.com/jkrumm/rollhook/compare/v1.3.0...v1.4.0) (2026-02-27)
+
+
+### Features
+
+* **ci:** deploy marketing site to VPS via RollHook after release ([900c0f2](https://github.com/jkrumm/rollhook/commit/900c0f2d529d70f28ae03a2f6ca42d133dd4a5cc))
+* **e2e:** comprehensive test suite with server stability fixes ([5c2e6e1](https://github.com/jkrumm/rollhook/commit/5c2e6e1ee494b31b4387ca69a488f4918000c140))
+* **marketing:** implement comprehensive SEO improvements ([505dd7d](https://github.com/jkrumm/rollhook/commit/505dd7d816a1c1e83bdd69785488fda1c6f34f05)), closes [#1e1f25](https://github.com/jkrumm/rollhook/issues/1e1f25)
+
+
+### Performance Improvements
+
+* **marketing:** compress og.png 1.5MB → 504KB via pngquant ([5eedec9](https://github.com/jkrumm/rollhook/commit/5eedec9a87a7b55e0311a52b183eeebb4ab1905e))
+
 # [1.3.0](https://github.com/jkrumm/rollhook/compare/v1.2.0...v1.3.0) (2026-02-27)
 
 
