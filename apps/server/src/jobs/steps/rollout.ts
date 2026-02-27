@@ -18,6 +18,19 @@ export async function rolloutApp(
   const log = (line: string) => appendFileSync(logPath, `[${new Date().toISOString()}] ${line}\n`)
   const cwd = dirname(composePath)
 
+  // Bun intermittent bug: the first Bun.spawn call with an explicit env object may
+  // throw ENOENT even when the binary path is absolute. A harmless warmup primes the
+  // posix_spawn machinery so the actual rollout calls succeed.
+  try {
+    const warmup = Bun.spawn([DOCKER_BIN, '--version'], {
+      env: { ...process.env },
+      stdout: 'ignore',
+      stderr: 'ignore',
+    })
+    await warmup.exited
+  }
+  catch { /* absorb warmup ENOENT — subsequent spawns will succeed */ }
+
   for (const step of steps) {
     log(`[rollout] Rolling out service: ${step.service} (IMAGE_TAG=${imageTag})`)
 
