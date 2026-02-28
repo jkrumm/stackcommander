@@ -1,0 +1,125 @@
+# RollHook — Simple production stack (direct socket mount)
+#
+# Use this when you run everything on a single trusted VPS and want minimal
+# moving parts. Traefik and RollHook both talk to Docker via the host socket.
+#
+# For a hardened setup with least-privilege socket proxies, see compose.socket.yml.
+#
+# Prerequisites:
+#   docker network create proxy
+#
+# Required environment variables (set in your shell or a .env file):
+#   DOMAIN=example.com
+#   ADMIN_TOKEN=$(openssl rand -hex 32)
+#   WEBHOOK_TOKEN=$(openssl rand -hex 32)
+#
+# RollHook also needs to read and run your app's compose files.
+# Mount the directory where your stacks live so compose file paths from Docker
+# labels are accessible inside the container:
+#   STACKS_DIR=/srv/stacks   (or wherever your compose files live)
+#
+# Optional environment variables:
+#   CF_DNS_API_TOKEN=...             # Cloudflare DNS challenge for wildcard TLS
+#   PUSHOVER_USER_KEY=...
+#   PUSHOVER_APP_TOKEN=...
+#   NOTIFICATION_WEBHOOK_URL=...
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Traefik — TLS termination and reverse proxy.
+  # Reads container labels directly from the Docker socket (read-only).
+  # ---------------------------------------------------------------------------
+  traefik:
+    image: traefik:v3.3
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN:-}
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=proxy
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=admin@${DOMAIN}
+      - --certificatesresolvers.letsencrypt.acme.storage=/certs/acme.json
+      # Use DNS challenge for wildcard certs (requires CF_DNS_API_TOKEN):
+      # - --certificatesresolvers.letsencrypt.acme.dnschallenge=true
+      # - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
+      # Use HTTP challenge for single-domain certs (no DNS provider needed):
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-certs:/certs
+    networks:
+      - proxy
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+
+  # ---------------------------------------------------------------------------
+  # RollHook — zero-downtime rolling deployments via webhook.
+  #
+  # No config file needed. RollHook discovers the compose file and service
+  # automatically from the running container's Docker Compose labels.
+  #
+  # Needs write access to the Docker socket (stops/removes old containers).
+  # Needs access to your stack directories so it can run `docker compose` on them.
+  # ---------------------------------------------------------------------------
+  rollhook:
+    image: registry.jkrumm.com/rollhook:latest
+    container_name: rollhook
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      WEBHOOK_TOKEN: ${WEBHOOK_TOKEN}
+      # Optional notifications:
+      # PUSHOVER_USER_KEY: ${PUSHOVER_USER_KEY}
+      # PUSHOVER_APP_TOKEN: ${PUSHOVER_APP_TOKEN}
+      # NOTIFICATION_WEBHOOK_URL: ${NOTIFICATION_WEBHOOK_URL}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mount your stacks dir at the same path so compose file paths from Docker
+      # labels (absolute host paths) resolve correctly inside this container:
+      - ${STACKS_DIR:-/srv/stacks}:${STACKS_DIR:-/srv/stacks}:ro
+      - rollhook-data:/app/data
+      # Uncomment if pulling from a private registry:
+      # - /root/.docker/config.json:/root/.docker/config.json:ro
+    healthcheck:
+      test: [CMD, bun, -e, "fetch('http://localhost:7700/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.rollhook.rule=Host(`rollhook.${DOMAIN}`)
+      - traefik.http.routers.rollhook.entrypoints=websecure
+      - traefik.http.routers.rollhook.tls.certresolver=letsencrypt
+      - traefik.http.services.rollhook.loadbalancer.server.port=7700
+      - traefik.http.services.rollhook.loadbalancer.healthcheck.path=/health
+      - traefik.http.services.rollhook.loadbalancer.healthcheck.interval=5s
+    networks:
+      - proxy
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+
+networks:
+  proxy:
+    external: true
+
+volumes:
+  traefik-certs:
+  rollhook-data:

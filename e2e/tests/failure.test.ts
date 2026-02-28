@@ -1,6 +1,6 @@
 import type { JobResult } from '../setup/fixtures.ts'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { adminHeaders, BASE_URL, REGISTRY_HOST } from '../setup/fixtures.ts'
+import { adminHeaders, BASE_URL, getContainerCount, REGISTRY_HOST } from '../setup/fixtures.ts'
 
 // Image tag that does not exist in the local registry → docker pull fails fast (no rollout)
 const NONEXISTENT_IMAGE = `${REGISTRY_HOST}/rollhook-e2e-hello:does-not-exist`
@@ -63,5 +63,11 @@ describe('failed deployment lifecycle', () => {
     expect(text).toContain('[discover] Discovery complete')
     expect(text).toContain('[pull]')
     expect(text).not.toContain('[rollout]')
+  })
+
+  it('container count is unchanged after pull failure — no scale-up artifacts', () => {
+    // Pull failure happens before rollout: the scale-up step never runs,
+    // so no extra containers should be left behind.
+    expect(getContainerCount()).toBe(1)
   })
 })

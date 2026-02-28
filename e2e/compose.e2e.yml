@@ -20,6 +20,28 @@ services:
     networks:
       - traefik
 
+  # RollHook runs as a container — mirrors real production deployment.
+  # PROJECT_ROOT is set by global.ts to the monorepo root so that compose file paths
+  # discovered from Docker labels (absolute host paths) are accessible inside this container.
+  rollhook:
+    image: rollhook-e2e-server:latest
+    pull_policy: never
+    ports:
+      - '7700:7700'
+    environment:
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      WEBHOOK_TOKEN: ${WEBHOOK_TOKEN}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - type: bind
+        source: ${PROJECT_ROOT}
+        target: ${PROJECT_ROOT}
+    depends_on:
+      - traefik
+      - registry
+    networks:
+      - traefik
+
 networks:
   traefik:
     name: e2e_traefik

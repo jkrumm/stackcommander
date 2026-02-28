@@ -138,7 +138,7 @@ bun run lint:fix    # Fix + format
 | ---------------------------------------- | ---------------------------------------------------------- |
 | `apps/server/server.ts`                  | Entry point — `.listen(7700)`                              |
 | `apps/server/src/app.ts`                 | Bare Elysia app (no `.listen()`) — OpenAPI + route plugins |
-| `apps/server/src/api/deploy.ts`          | `POST /deploy` — accepts `image_tag`, enqueues job    |
+| `apps/server/src/api/deploy.ts`          | `POST /deploy` — accepts `image_tag`, enqueues job         |
 | `apps/server/src/api/jobs.ts`            | `GET /jobs/:id`, `GET /jobs/:id/logs` (SSE), `GET /jobs`   |
 | `apps/server/src/middleware/auth.ts`     | Bearer token plugin — two roles: `admin`, `webhook`        |
 | `apps/server/src/db/client.ts`           | `bun:sqlite` instance, auto-migrations                     |
@@ -152,9 +152,9 @@ OpenAPI (Scalar UI): `@elysiajs/openapi` — served at `/openapi`, JSON spec at 
 
 Two bearer token roles, set via environment variables (never in config files):
 
-| Env var         | Role      | Allowed routes                                             |
-| --------------- | --------- | ---------------------------------------------------------- |
-| `ADMIN_TOKEN`   | `admin`   | All routes                                                 |
+| Env var         | Role      | Allowed routes                                        |
+| --------------- | --------- | ----------------------------------------------------- |
+| `ADMIN_TOKEN`   | `admin`   | All routes                                            |
 | `WEBHOOK_TOKEN` | `webhook` | `POST /deploy`, `GET /jobs/:id`, `GET /jobs/:id/logs` |
 
 ---

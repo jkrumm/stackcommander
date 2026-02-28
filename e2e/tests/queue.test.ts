@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adminHeaders, BASE_URL, pollJobUntilDone, REGISTRY_HOST, webhookHeaders } from '../setup/fixtures.ts'
+import { adminHeaders, BASE_URL, getContainerCount, pollJobUntilDone, REGISTRY_HOST, webhookHeaders } from '../setup/fixtures.ts'
 
 const IMAGE_V1 = `${REGISTRY_HOST}/rollhook-e2e-hello:v1`
 
@@ -45,6 +45,10 @@ describe('job queue', () => {
     expect(new Date(job1.updated_at).getTime()).toBeLessThanOrEqual(
       new Date(job2.updated_at).getTime(),
     )
+
+    // After both deploys complete there must be exactly 1 container — each rollout
+    // scales up and then drains the old containers, not accumulating extras.
+    expect(getContainerCount()).toBe(1)
   })
 
   it('queued jobs are listed with correct status before processing', async () => {

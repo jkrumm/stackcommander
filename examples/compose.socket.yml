@@ -1,27 +1,39 @@
-# Reference infrastructure stack: Traefik + RollHook + socket proxies
+# RollHook — Hardened production stack (socket proxy pattern)
 #
-# Deployment pattern:
-#   - Traefik handles TLS termination and reverse proxying
-#   - RollHook receives webhook deploys and runs docker-rollout
-#   - Each consumer gets its own socket proxy scoped to minimum permissions:
-#       socket-proxy         (read-only, POST=0) → Traefik label discovery
-#       socket-proxy-rollhook (POST=1, write)    → RollHook rolling deploys
-#   - No service mounts /var/run/docker.sock directly
+# Recommended for production. No service mounts the Docker socket directly.
+# Instead each consumer gets a dedicated socket proxy scoped to minimum permissions:
+#
+#   socket-proxy          (POST=0, read-only)  → Traefik label discovery
+#   socket-proxy-rollhook (POST=1, read+write) → RollHook rolling deployments
+#
+# Each proxy lives on its own isolated internal network — Traefik and RollHook
+# cannot reach each other's proxy.
 #
 # Prerequisites:
-#   - Docker network "proxy" must exist: docker network create proxy
-#   - .env file with required variables (see below)
+#   docker network create proxy
 #
-# Required .env variables:
-#   DOMAIN=<your-domain>           # e.g. example.com
-#   ROLLHOOK_ADMIN_TOKEN=<token>   # openssl rand -hex 32
-#   ROLLHOOK_WEBHOOK_TOKEN=<token>
+# Required environment variables (set in your shell or a .env file):
+#   DOMAIN=example.com
+#   ADMIN_TOKEN=$(openssl rand -hex 32)
+#   WEBHOOK_TOKEN=$(openssl rand -hex 32)
+#
+# RollHook also needs to read and run your app's compose files.
+# Mount the directory where your stacks live so compose file paths from Docker
+# labels are accessible inside the container:
+#   STACKS_DIR=/srv/stacks   (or wherever your compose files live)
+#
+# Optional environment variables:
+#   CF_DNS_API_TOKEN=...             # Cloudflare DNS challenge for wildcard TLS
+#   PUSHOVER_USER_KEY=...
+#   PUSHOVER_APP_TOKEN=...
+#   NOTIFICATION_WEBHOOK_URL=...
 
 services:
 
   # ---------------------------------------------------------------------------
   # Socket proxy for Traefik — read-only Docker API for container label discovery.
-  # POST=0 ensures Traefik cannot mutate anything. Isolated on socket-proxy-net.
+  # POST=0 ensures Traefik can never mutate Docker state. Isolated on its own
+  # internal network so RollHook cannot accidentally reach it.
   # ---------------------------------------------------------------------------
   socket-proxy:
     image: tecnativa/docker-socket-proxy:latest
@@ -46,8 +58,8 @@ services:
       options: {max-size: 5m, max-file: '2'}
 
   # ---------------------------------------------------------------------------
-  # Traefik — TLS termination + reverse proxy.
-  # Reads container labels via socket proxy (DOCKER_HOST), not direct socket.
+  # Traefik — TLS termination and reverse proxy.
+  # Reads container labels via socket proxy (DOCKER_HOST), never the raw socket.
   # ---------------------------------------------------------------------------
   traefik:
     image: traefik:v3.3
@@ -61,11 +73,25 @@ services:
       - '80:80'
       - '443:443'
     environment:
-      - DOCKER_HOST=tcp://socket-proxy:2375
-      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN} # remove if not using Cloudflare DNS challenge
+      DOCKER_HOST: tcp://socket-proxy:2375
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN:-}
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=proxy
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=admin@${DOMAIN}
+      - --certificatesresolvers.letsencrypt.acme.storage=/certs/acme.json
+      # Use DNS challenge for wildcard certs (requires CF_DNS_API_TOKEN):
+      # - --certificatesresolvers.letsencrypt.acme.dnschallenge=true
+      # - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
+      # Use HTTP challenge for single-domain certs (no DNS provider needed):
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
     volumes:
-      - ./config/traefik/traefik.yml:/traefik.yml:ro
-      - ./config/traefik/dynamic.yml:/dynamic.yml:ro
       - traefik-certs:/certs
     networks:
       - proxy
@@ -76,7 +102,7 @@ services:
 
   # ---------------------------------------------------------------------------
   # Socket proxy for RollHook — write access (POST=1) for rolling deployments.
-  # Isolated on socket-proxy-rollhook-net, never shared with Traefik's proxy.
+  # Isolated on a separate internal network; Traefik's proxy is never reachable.
   # ---------------------------------------------------------------------------
   socket-proxy-rollhook:
     image: tecnativa/docker-socket-proxy:latest
@@ -104,6 +130,9 @@ services:
   #
   # No config file needed. RollHook discovers the compose file and service
   # automatically from the running container's Docker Compose labels.
+  #
+  # Needs to read and run your app's compose files — mount your stacks dir at
+  # the same path so compose file paths from Docker labels resolve correctly.
   # ---------------------------------------------------------------------------
   rollhook:
     image: registry.jkrumm.com/rollhook:latest
@@ -114,29 +143,29 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      ADMIN_TOKEN: ${ROLLHOOK_ADMIN_TOKEN}
-      WEBHOOK_TOKEN: ${ROLLHOOK_WEBHOOK_TOKEN}
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      WEBHOOK_TOKEN: ${WEBHOOK_TOKEN}
       DOCKER_HOST: tcp://socket-proxy-rollhook:2375
-      # Optional: Pushover mobile notifications
+      # Optional notifications:
       # PUSHOVER_USER_KEY: ${PUSHOVER_USER_KEY}
       # PUSHOVER_APP_TOKEN: ${PUSHOVER_APP_TOKEN}
-      # Optional: POST job result JSON to a URL on completion
       # NOTIFICATION_WEBHOOK_URL: ${NOTIFICATION_WEBHOOK_URL}
     volumes:
+      # Mount your stacks dir at the same path so compose file paths from Docker
+      # labels (absolute host paths) resolve correctly inside this container:
+      - ${STACKS_DIR:-/srv/stacks}:${STACKS_DIR:-/srv/stacks}:ro
       - rollhook-data:/app/data
-      # Required if pulling from a private registry:
-      # docker-rollout runs docker pull using the container's Docker CLI credentials,
-      # not the host's. Mount the host's config to pass private registry auth through.
+      # Uncomment if pulling from a private registry:
       # - /root/.docker/config.json:/root/.docker/config.json:ro
     healthcheck:
       test: [CMD, bun, -e, "fetch('http://localhost:7700/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
-      start_period: 10s
+      start_period: 15s
       retries: 3
     labels:
       - traefik.enable=true
-      - traefik.http.routers.rollhook.rule=Host(`rollhook.<your-domain>`)
+      - traefik.http.routers.rollhook.rule=Host(`rollhook.${DOMAIN}`)
       - traefik.http.routers.rollhook.entrypoints=websecure
       - traefik.http.routers.rollhook.tls.certresolver=letsencrypt
       - traefik.http.services.rollhook.loadbalancer.server.port=7700

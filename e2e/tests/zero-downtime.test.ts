@@ -1,22 +1,8 @@
-import { execSync } from 'node:child_process'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { adminHeaders, BASE_URL, pollJobUntilDone, REGISTRY_HOST, TRAEFIK_URL, webhookHeaders } from '../setup/fixtures.ts'
+import { adminHeaders, BASE_URL, getContainerCount, pollJobUntilDone, REGISTRY_HOST, TRAEFIK_URL, webhookHeaders } from '../setup/fixtures.ts'
 
 const IMAGE_V1 = `${REGISTRY_HOST}/rollhook-e2e-hello:v1`
 const IMAGE_V2 = `${REGISTRY_HOST}/rollhook-e2e-hello:v2`
-
-function getContainerCount(): number {
-  try {
-    const output = execSync(
-      'docker ps --filter name=bun-hello-world-hello-world --format "{{.Names}}"',
-      { encoding: 'utf-8' },
-    ).trim()
-    return output ? output.split('\n').filter(Boolean).length : 0
-  }
-  catch {
-    return 0
-  }
-}
 
 beforeAll(async () => {
   // Ensure we're starting from a clean v1 state before the zero-downtime tests run.
