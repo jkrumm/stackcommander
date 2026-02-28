@@ -399,14 +399,15 @@ Use the official [rollhook-action](https://github.com/jkrumm/rollhook-action) fo
 ```yaml
 - uses: jkrumm/rollhook-action@v1
   with:
-    url: ${{ secrets.ROLLHOOK_URL }}
+    url: https://rollhook.example.com
     token: ${{ secrets.ROLLHOOK_WEBHOOK_TOKEN }}
+    app: my-api                          # compose service name; defaults to repo name if they match
     image_tag: registry.example.com/my-api:${{ github.sha }}
 ```
 
 The action POSTs the deploy trigger, then streams SSE logs live to the CI run and polls for the terminal state — no custom scripts needed.
 
-**Inputs:** `url`, `token`, `app` (default: repo name), `image_tag`, `timeout` (default: 600s)
+**Inputs:** `url`, `token`, `app` (default: repo name — set explicitly when compose service name differs), `image_tag`, `timeout` (default: 600s)
 **Outputs:** `job_id`, `status`
 
 **Alternative — plain curl:**
