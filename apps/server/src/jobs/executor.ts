@@ -30,7 +30,7 @@ async function executeJob(job: { jobId: string, app: string, imageTag: string })
   try {
     const { composePath, service, project } = await discover(imageTag, app, logPath)
     if (service !== app)
-      throw new Error(`Discovered service '${service}' does not match requested app '${app}'`)
+      throw new Error(`Discovered service '${service}' does not match requested app '${app}' — ensure the :app in the deploy URL matches the Docker Compose service name`)
     updateJobDiscovery(jobId, composePath, service)
     validateCompose(composePath, imageTag, logPath)
     await pullImage(imageTag, logPath)

@@ -1,6 +1,6 @@
 import process from 'node:process'
 
-function parseDockerHost(): { type: 'unix', path: string } | { type: 'tcp', baseUrl: string } {
+export function parseDockerHost(): { type: 'unix', path: string } | { type: 'tcp', baseUrl: string } {
   const dockerHost = process.env.DOCKER_HOST
   if (!dockerHost || dockerHost.startsWith('unix://')) {
     const socketPath = dockerHost ? dockerHost.slice('unix://'.length) : '/var/run/docker.sock'

@@ -1,11 +1,14 @@
 import type { ContainerDetail, ContainerSummary } from '@/docker/types'
 import { dockerFetch } from '@/docker/client'
 
-export async function listContainersByImage(imageName: string): Promise<ContainerSummary[]> {
-  const filters = encodeURIComponent(JSON.stringify({ ancestor: [imageName] }))
-  const res = await dockerFetch(`/containers/json?filters=${filters}`)
+// Only log high-level pull events — not per-layer Downloading/Extracting/Waiting noise.
+// A typical image with 20 layers emits 100+ lines without this filter.
+const PULL_LOG_PREFIXES = ['Pulling from', 'Pull complete', 'Already exists', 'Digest:', 'Status:']
+
+export async function listRunningContainers(): Promise<ContainerSummary[]> {
+  const res = await dockerFetch('/containers/json')
   if (!res.ok)
-    throw new Error(`Docker API error listing containers by image: ${res.status} ${await res.text()}`)
+    throw new Error(`Docker API error listing containers: ${res.status} ${await res.text()}`)
   return res.json() as Promise<ContainerSummary[]>
 }
 
@@ -30,23 +33,31 @@ export async function listServiceContainers(project: string, service: string): P
 }
 
 export async function pullImageStream(imageTag: string, logFn: (line: string) => void): Promise<void> {
-  // Split imageTag into fromImage + tag for the Docker API
-  const lastSlash = imageTag.lastIndexOf('/')
-  const afterSlash = imageTag.slice(lastSlash + 1)
-  const colonIdx = afterSlash.lastIndexOf(':')
-
+  // Digest-only references (image@sha256:hash) are passed whole as fromImage.
+  // For tagged references, split at the last colon after the last slash.
   let fromImage: string
-  let tag: string
-  if (colonIdx >= 0) {
-    fromImage = imageTag.slice(0, lastSlash + 1 + colonIdx)
-    tag = afterSlash.slice(colonIdx + 1)
+  let tag: string | undefined
+
+  const digestIdx = imageTag.indexOf('@sha256:')
+  if (digestIdx >= 0) {
+    fromImage = imageTag
+    tag = undefined
   }
   else {
-    fromImage = imageTag
-    tag = 'latest'
+    const lastSlash = imageTag.lastIndexOf('/')
+    const afterSlash = imageTag.slice(lastSlash + 1)
+    const colonIdx = afterSlash.lastIndexOf(':')
+    if (colonIdx >= 0) {
+      fromImage = imageTag.slice(0, lastSlash + 1 + colonIdx)
+      tag = afterSlash.slice(colonIdx + 1)
+    }
+    else {
+      fromImage = imageTag
+      tag = 'latest'
+    }
   }
 
-  const params = new URLSearchParams({ fromImage, tag })
+  const params = new URLSearchParams(tag !== undefined ? { fromImage, tag } : { fromImage })
   const res = await dockerFetch(`/images/create?${params}`, { method: 'POST' })
   if (!res.ok) {
     const body = await res.text()
@@ -71,13 +82,14 @@ export async function pullImageStream(imageTag: string, logFn: (line: string) =>
       if (!line.trim())
         continue
       try {
-        const event = JSON.parse(line) as { status?: string, error?: string, progress?: string }
+        const parsed = JSON.parse(line)
+        if (typeof parsed !== 'object' || parsed === null)
+          continue
+        const event = parsed as { status?: string, error?: string }
         if (event.error)
           throw new Error(`Docker pull error: ${event.error}`)
-        if (event.status) {
-          const msg = event.progress ? `${event.status} ${event.progress}` : event.status
-          logFn(msg)
-        }
+        if (event.status && PULL_LOG_PREFIXES.some(p => event.status!.startsWith(p)))
+          logFn(event.status)
       }
       catch (e) {
         if (e instanceof Error && e.message.startsWith('Docker pull error'))

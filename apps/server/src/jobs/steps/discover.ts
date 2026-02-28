@@ -1,6 +1,6 @@
 import type { ContainerSummary } from '@/docker/types'
 import { appendFileSync } from 'node:fs'
-import { inspectContainer, listContainersByImage } from '@/docker/api'
+import { inspectContainer, listRunningContainers } from '@/docker/api'
 
 // Exported for unit testing — pure parsing helpers with no side effects.
 
@@ -59,7 +59,7 @@ export async function discover(imageTag: string, app: string, logPath: string): 
 
   log(`[discover] Searching for containers using image: ${imageName}`)
 
-  const containers = await listContainersByImage(imageName)
+  const containers = await listRunningContainers()
   const match = findMatchingContainerId(containers, imageName)
 
   if (!match) {
