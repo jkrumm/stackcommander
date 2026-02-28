@@ -1,3 +1,10 @@
+## [1.4.2](https://github.com/jkrumm/rollhook/compare/v1.4.1...v1.4.2) (2026-02-28)
+
+
+### Bug Fixes
+
+* **ci:** pass admin_token to rollhook-action for job polling ([9676173](https://github.com/jkrumm/rollhook/commit/96761734e2464d8505e8ec5fb2e80e943d2da63b))
+
 ## [1.4.1](https://github.com/jkrumm/rollhook/compare/v1.4.0...v1.4.1) (2026-02-28)
 
 
