@@ -1,8 +1,24 @@
 import type { JobResult } from 'rollhook'
+import { execSync } from 'node:child_process'
 
 export const BASE_URL = 'http://localhost:7700'
 export const TRAEFIK_URL = 'http://localhost:9080'
 export const REGISTRY_HOST = 'localhost:5001'
+
+// Count running containers whose name starts with the given prefix.
+// Docker Compose names containers as <project>-<service>-<index>, e.g. bun-hello-world-hello-world-1.
+export function getContainerCount(nameFilter = 'bun-hello-world-hello-world'): number {
+  try {
+    const output = execSync(
+      `docker ps --filter name=${nameFilter} --format "{{.Names}}"`,
+      { encoding: 'utf-8' },
+    ).trim()
+    return output ? output.split('\n').filter(Boolean).length : 0
+  }
+  catch {
+    return 0
+  }
+}
 
 export const ADMIN_TOKEN = 'e2e-admin-token'
 export const WEBHOOK_TOKEN = 'e2e-webhook-token'

@@ -1,6 +1,6 @@
 import type { JobResult } from '../setup/fixtures.ts'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { adminHeaders, BASE_URL, pollJobUntilDone, REGISTRY_HOST, webhookHeaders } from '../setup/fixtures.ts'
+import { adminHeaders, BASE_URL, getContainerCount, pollJobUntilDone, REGISTRY_HOST, TRAEFIK_URL, webhookHeaders } from '../setup/fixtures.ts'
 
 const IMAGE_V1 = `${REGISTRY_HOST}/rollhook-e2e-hello:v1`
 const NONEXISTENT_IMAGE = `${REGISTRY_HOST}/rollhook-e2e-hello:no-such-tag`
@@ -94,6 +94,18 @@ describe('deploy API', () => {
       body: JSON.stringify({}),
     })
     expect(res.status).toBe(422)
+  })
+
+  it('deployed version is actually served by the app after success', async () => {
+    const res = await fetch(`${TRAEFIK_URL}/version`)
+    expect(res.status).toBe(200)
+    const body = await res.json() as { version: string }
+    expect(body.version).toBe('v1')
+  })
+
+  it('exactly one container is running after successful deploy', () => {
+    // Rolling update must not leave extra containers behind; never too few either
+    expect(getContainerCount()).toBe(1)
   })
 
   it('?async=true returns queued status immediately without blocking', async () => {

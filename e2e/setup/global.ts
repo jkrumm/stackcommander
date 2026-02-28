@@ -1,5 +1,4 @@
-import type { ChildProcess } from 'node:child_process'
-import { execSync, spawn } from 'node:child_process'
+import { execSync } from 'node:child_process'
 import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -10,19 +9,28 @@ const ROOT = join(DIR, '../..')
 const E2E_DIR = join(ROOT, 'e2e')
 const HELLO_WORLD_DIR = join(ROOT, 'examples/bun-hello-world')
 
-let serverProcess: ChildProcess | null = null
+function composeE2E(args: string, extraEnv?: Record<string, string>): void {
+  execSync(
+    `docker compose -f ${E2E_DIR}/compose.e2e.yml --project-name rollhook-e2e ${args}`,
+    {
+      stdio: 'inherit',
+      env: { ...process.env, PROJECT_ROOT: ROOT, ADMIN_TOKEN, WEBHOOK_TOKEN, ...extraEnv },
+    },
+  )
+}
 
 export async function setup(): Promise<void> {
   // Tear down any stale state from a previous crashed run before starting fresh
   execSync(`docker compose --project-directory ${HELLO_WORLD_DIR} down -v 2>/dev/null || true`)
-  execSync(`docker compose -f ${E2E_DIR}/compose.e2e.yml --project-name rollhook-e2e down -v 2>/dev/null || true`)
+  composeE2E('down -v 2>/dev/null || true')
   // Kill any stale rollhook server left behind by a previous interrupted run
   execSync(`lsof -ti :7700 | xargs kill -9 2>/dev/null || true`)
 
-  // Start infrastructure (Traefik + local registry)
-  execSync(`docker compose -f ${E2E_DIR}/compose.e2e.yml --project-name rollhook-e2e up -d`, {
-    stdio: 'inherit',
-  })
+  // Build the RollHook Docker image from the monorepo root so E2E runs the real container
+  execSync(`docker build -t rollhook-e2e-server:latest ${ROOT}`, { stdio: 'inherit' })
+
+  // Start infrastructure (Traefik + local registry) and RollHook container
+  composeE2E('up -d')
 
   // Wait for registry to be ready
   await waitForUrl('http://localhost:5001/v2/', 30_000)
@@ -49,61 +57,20 @@ export async function setup(): Promise<void> {
     stdio: 'inherit',
   })
 
+  // Wait for RollHook to be ready
+  await waitForUrl('http://localhost:7700/health', 30_000)
+
   // Wait for hello-world to be routable through Traefik before starting any tests.
   // Traefik discovers container labels within ~100ms but needs its healthcheck to pass
   // before routing. Without this wait, zero-downtime "v1 is running" assertion can fail.
   await waitForUrl('http://localhost:9080/version', 30_000)
-
-  // Spawn rollhook server natively
-  serverProcess = spawn('bun', ['run', 'apps/server/server.ts'], {
-    cwd: ROOT,
-    env: {
-      ...process.env,
-      ADMIN_TOKEN,
-      WEBHOOK_TOKEN,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-
-  serverProcess.stdout?.on('data', (chunk: Uint8Array) => {
-    process.stdout.write(chunk)
-  })
-  serverProcess.stderr?.on('data', (chunk: Uint8Array) => {
-    process.stderr.write(chunk)
-  })
-  serverProcess.on('exit', (code) => {
-    if (code !== null && code !== 0)
-      process.stderr.write(`[global] RollHook server exited with code ${code}\n`)
-  })
-
-  // Wait for server to be ready
-  await waitForUrl('http://localhost:7700/health', 30_000)
 }
 
 export async function teardown(): Promise<void> {
-  if (serverProcess) {
-    const proc = serverProcess
-    serverProcess = null
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(() => {
-        proc.kill('SIGKILL')
-        resolve()
-      }, 6_000)
-      proc.on('exit', () => {
-        clearTimeout(timeout)
-        resolve()
-      })
-      proc.kill()
-    })
-  }
-
   execSync(`docker compose --project-directory ${HELLO_WORLD_DIR} down -v`, {
     stdio: 'inherit',
   })
-  execSync(
-    `docker compose -f ${E2E_DIR}/compose.e2e.yml --project-name rollhook-e2e down -v`,
-    { stdio: 'inherit' },
-  )
+  composeE2E('down -v')
 }
 
 async function waitForUrl(url: string, timeoutMs: number): Promise<void> {

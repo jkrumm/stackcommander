@@ -145,7 +145,7 @@ describe('pullImageStream', () => {
   it('handles digest-only image tag — passes full reference as fromImage', async () => {
     const digest = `registry.example.com/myapp@sha256:${'a'.repeat(64)}`
     let capturedUrl = ''
-    // eslint-disable-next-line ts/no-unsafe-argument
+
     const spy = spyOn(globalThis, 'fetch').mockImplementation(((url: string | URL | Request) => {
       capturedUrl = String(url)
       return Promise.resolve(makeNdjsonStream([

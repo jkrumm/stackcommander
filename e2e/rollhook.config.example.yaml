@@ -1,6 +1,0 @@
-# yaml-language-server: $schema=https://cdn.jsdelivr.net/npm/rollhook/schema/config.json
-# Machine-specific config — generated at runtime by e2e/setup/global.ts
-# DO NOT commit the generated rollhook.config.yaml (it is gitignored)
-apps:
-  - name: hello-world
-    clone_path: /absolute/path/to/rollhook/examples/bun-hello-world
