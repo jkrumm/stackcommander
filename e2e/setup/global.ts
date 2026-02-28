@@ -1,6 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
 import { execSync, spawn } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -44,13 +43,8 @@ export async function setup(): Promise<void> {
   execSync(`docker tag rollhook-e2e-hello:v2 ${REGISTRY_HOST}/rollhook-e2e-hello:v2`)
   execSync(`docker push ${REGISTRY_HOST}/rollhook-e2e-hello:v2`, { stdio: 'inherit' })
 
-  // Write .env for initial docker-compose image tag resolution
-  writeFileSync(
-    join(HELLO_WORLD_DIR, '.env'),
-    `IMAGE_TAG=${REGISTRY_HOST}/rollhook-e2e-hello:v1\n`,
-  )
-
   // Start hello-world app at v1
+  // compose.yml default `${IMAGE_TAG:-localhost:5001/rollhook-e2e-hello:v1}` handles initial startup
   execSync(`docker compose --project-directory ${HELLO_WORLD_DIR} up -d`, {
     stdio: 'inherit',
   })

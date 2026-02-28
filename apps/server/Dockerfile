@@ -6,9 +6,7 @@ RUN apk add --no-cache curl \
      | tar xz --strip-components=1 -C /usr/local/bin docker/docker \
   && curl -fsSL "https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-x86_64" \
      -o /usr/local/bin/docker-compose-plugin \
-  && curl -fsSL "https://github.com/wowu/docker-rollout/releases/download/v0.13/docker-rollout" \
-     -o /usr/local/bin/docker-rollout \
-  && chmod +x /usr/local/bin/docker-compose-plugin /usr/local/bin/docker-rollout
+  && chmod +x /usr/local/bin/docker-compose-plugin
 
 FROM oven/bun:1.3.9-slim AS runner
 WORKDIR /app
@@ -16,7 +14,6 @@ WORKDIR /app
 COPY --from=tool-downloader /usr/local/bin/docker /usr/local/bin/docker
 RUN mkdir -p /usr/local/lib/docker/cli-plugins
 COPY --from=tool-downloader /usr/local/bin/docker-compose-plugin /usr/local/lib/docker/cli-plugins/docker-compose
-COPY --from=tool-downloader /usr/local/bin/docker-rollout /usr/local/lib/docker/cli-plugins/docker-rollout
 
 ARG VERSION=dev
 ENV NODE_ENV=production

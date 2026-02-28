@@ -28,13 +28,13 @@ async function executeJob(job: { jobId: string, app: string, imageTag: string })
   let finalError: string | undefined
 
   try {
-    const { composePath, service } = await discover(imageTag, app, logPath)
+    const { composePath, service, project } = await discover(imageTag, app, logPath)
     if (service !== app)
       throw new Error(`Discovered service '${service}' does not match requested app '${app}'`)
     updateJobDiscovery(jobId, composePath, service)
-    validateCompose(composePath, logPath)
+    validateCompose(composePath, imageTag, logPath)
     await pullImage(imageTag, logPath)
-    await rolloutApp(composePath, service, imageTag, logPath)
+    await rolloutApp(composePath, service, project, imageTag, logPath)
     log(`[executor] Deployment successful: ${app}`)
   }
   catch (err) {

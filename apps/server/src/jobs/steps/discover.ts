@@ -1,10 +1,6 @@
+import type { ContainerSummary } from '@/docker/types'
 import { appendFileSync } from 'node:fs'
-
-interface DockerPsEntry {
-  ID: string
-  Image: string
-  Names: string
-}
+import { inspectContainer, listContainersByImage } from '@/docker/api'
 
 // Exported for unit testing — pure parsing helpers with no side effects.
 
@@ -20,45 +16,30 @@ export function extractImageName(imageTag: string): string {
 }
 
 export function findMatchingContainerId(
-  psOutput: string,
+  containers: ContainerSummary[],
   imageName: string,
 ): { id: string, name: string } | null {
-  for (const line of psOutput.split('\n')) {
-    if (!line.trim())
-      continue
-    let entry: DockerPsEntry
-    try {
-      entry = JSON.parse(line) as DockerPsEntry
-    }
-    catch {
-      continue
-    }
+  for (const container of containers) {
     // Match containers whose image is exactly `imageName` (bare) or `imageName:tag`
-    if (entry.Image === imageName || entry.Image.startsWith(`${imageName}:`)) {
-      return { id: entry.ID, name: entry.Names.replace(/^\//, '') }
+    if (container.Image === imageName || container.Image.startsWith(`${imageName}:`)) {
+      const name = (container.Names[0] ?? '').replace(/^\//, '')
+      return { id: container.Id, name }
     }
   }
   return null
 }
 
 export function extractComposeInfo(
-  inspectOutput: string,
+  labels: Record<string, string> | null,
   containerName: string,
-): { composePath: string, service: string } {
-  let labels: Record<string, string> | null
-  try {
-    labels = JSON.parse(inspectOutput.trim()) as Record<string, string> | null
-  }
-  catch {
-    throw new Error(`Container ${containerName} returned invalid JSON from docker inspect`)
-  }
-
+): { composePath: string, service: string, project: string } {
   if (!labels)
     throw new Error(`Container ${containerName} has no Docker labels — not started via docker compose`)
 
   // config_files may list multiple comma-separated paths when using -f overrides; take the first
   const composePath = (labels['com.docker.compose.project.config_files'] ?? '').split(',')[0]?.trim()
   const service = labels['com.docker.compose.service']
+  const project = labels['com.docker.compose.project']
 
   if (!composePath)
     throw new Error(`Container ${containerName} is missing 'config_files' label — not started via docker compose`)
@@ -66,30 +47,20 @@ export function extractComposeInfo(
   if (!service)
     throw new Error(`Container ${containerName} is missing 'service' label — not started via docker compose`)
 
-  return { composePath, service }
+  if (!project)
+    throw new Error(`Container ${containerName} is missing 'project' label — not started via docker compose`)
+
+  return { composePath, service, project }
 }
 
-export async function discover(imageTag: string, app: string, logPath: string): Promise<{ composePath: string, service: string }> {
+export async function discover(imageTag: string, app: string, logPath: string): Promise<{ composePath: string, service: string, project: string }> {
   const log = (line: string) => appendFileSync(logPath, `[${new Date().toISOString()}] ${line}\n`)
   const imageName = extractImageName(imageTag)
 
   log(`[discover] Searching for containers using image: ${imageName}`)
 
-  const psProc = Bun.spawn(['docker', 'ps', '--format', '{{json .}}'], {
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-
-  const [psExit, psStdout, psStderr] = await Promise.all([
-    psProc.exited,
-    new Response(psProc.stdout).text(),
-    new Response(psProc.stderr).text(),
-  ])
-
-  if (psExit !== 0)
-    throw new Error(`docker ps failed (exit ${psExit}): ${psStderr}`)
-
-  const match = findMatchingContainerId(psStdout, imageName)
+  const containers = await listContainersByImage(imageName)
+  const match = findMatchingContainerId(containers, imageName)
 
   if (!match) {
     log(`[discover] No running containers found matching image: ${imageName}`)
@@ -102,25 +73,12 @@ export async function discover(imageTag: string, app: string, logPath: string): 
 
   log(`[discover] Found container: ${match.name} (ID: ${match.id.slice(0, 12)})`)
 
-  const inspectProc = Bun.spawn(['docker', 'inspect', match.id, '--format', '{{json .Config.Labels}}'], {
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-
-  const [inspectExit, inspectStdout, inspectStderr] = await Promise.all([
-    inspectProc.exited,
-    new Response(inspectProc.stdout).text(),
-    new Response(inspectProc.stderr).text(),
-  ])
-
-  if (inspectExit !== 0)
-    throw new Error(`docker inspect failed (exit ${inspectExit}): ${inspectStderr}`)
-
-  const { composePath, service } = extractComposeInfo(inspectStdout, match.name)
+  const detail = await inspectContainer(match.id)
+  const { composePath, service, project } = extractComposeInfo(detail.Config.Labels, match.name)
 
   log(`[discover] Compose file: ${composePath}`)
   log(`[discover] Service: ${service}`)
   log(`[discover] Discovery complete`)
 
-  return { composePath, service }
+  return { composePath, service, project }
 }
