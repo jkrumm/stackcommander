@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/jkrumm/rollhook/compare/v1.5.0...v1.5.1) (2026-02-28)
+
+
+### Bug Fixes
+
+* **docs:** add app input to rollhook-action example, clarify default ([8dca5f9](https://github.com/jkrumm/rollhook/commit/8dca5f98a15f8a4bbc1c1ae104896c21a43bca45))
+
 # [1.5.0](https://github.com/jkrumm/rollhook/compare/v1.4.2...v1.5.0) (2026-02-28)
 
 
