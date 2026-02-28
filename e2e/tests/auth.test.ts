@@ -23,8 +23,8 @@ describe('authentication', () => {
     expect(res.status).toBe(200)
   })
 
-  it('webhook token on POST /deploy/hello-world → not 401/403', async () => {
-    const res = await fetch(`${BASE_URL}/deploy/hello-world`, {
+  it('webhook token on POST /deploy → not 401/403', async () => {
+    const res = await fetch(`${BASE_URL}/deploy`, {
       method: 'POST',
       headers: webhookHeaders(),
       body: JSON.stringify({ image_tag: NONEXISTENT_IMAGE }),
@@ -33,8 +33,8 @@ describe('authentication', () => {
     expect(res.status).not.toBe(403)
   })
 
-  it('admin token on POST /deploy/hello-world → not 401/403', async () => {
-    const res = await fetch(`${BASE_URL}/deploy/hello-world`, {
+  it('admin token on POST /deploy → not 401/403', async () => {
+    const res = await fetch(`${BASE_URL}/deploy`, {
       method: 'POST',
       headers: adminHeaders(),
       body: JSON.stringify({ image_tag: NONEXISTENT_IMAGE }),
@@ -64,7 +64,7 @@ describe('authentication', () => {
 
   it('webhook token on GET /jobs/:id → not 401/403', async () => {
     // Trigger a fast-failing deploy to get a job ID
-    const deployRes = await fetch(`${BASE_URL}/deploy/hello-world?async=true`, {
+    const deployRes = await fetch(`${BASE_URL}/deploy?async=true`, {
       method: 'POST',
       headers: webhookHeaders(),
       body: JSON.stringify({ image_tag: NONEXISTENT_IMAGE }),

@@ -7,7 +7,7 @@ const IMAGE_V2 = `${REGISTRY_HOST}/rollhook-e2e-hello:v2`
 beforeAll(async () => {
   // Ensure we're starting from a clean v1 state before the zero-downtime tests run.
   // The synchronous deploy blocks until complete, so we know v1 is fully up when tests begin.
-  const res = await fetch(`${BASE_URL}/deploy/hello-world`, {
+  const res = await fetch(`${BASE_URL}/deploy`, {
     method: 'POST',
     headers: adminHeaders(),
     body: JSON.stringify({ image_tag: IMAGE_V1 }),
@@ -31,7 +31,7 @@ describe('zero-downtime rolling deployment', () => {
 
   it('deploys v2 without dropping requests', async () => {
     // Trigger v2 deployment asynchronously so the traffic poller runs concurrently with rollout
-    const deployRes = await fetch(`${BASE_URL}/deploy/hello-world?async=true`, {
+    const deployRes = await fetch(`${BASE_URL}/deploy?async=true`, {
       method: 'POST',
       headers: webhookHeaders(),
       body: JSON.stringify({ image_tag: IMAGE_V2 }),

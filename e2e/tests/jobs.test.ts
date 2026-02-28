@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { adminHeaders, BASE_URL, REGISTRY_HOST, webhookHeaders, webhookPollJobUntilDone } from '../setup/fixtures.ts'
+import { adminHeaders, APP_NAME, BASE_URL, REGISTRY_HOST, webhookHeaders, webhookPollJobUntilDone } from '../setup/fixtures.ts'
 
 const IMAGE_V1 = `${REGISTRY_HOST}/rollhook-e2e-hello:v1`
 const NONEXISTENT_IMAGE = `${REGISTRY_HOST}/rollhook-e2e-hello:no-such-tag`
@@ -11,7 +11,7 @@ let failedJobId: string
 
 beforeAll(async () => {
   // Successful deploy: IMAGE_V1 runs the full pipeline, producing [validate] [pull] [rollout] logs
-  const successRes = await fetch(`${BASE_URL}/deploy/hello-world`, {
+  const successRes = await fetch(`${BASE_URL}/deploy`, {
     method: 'POST',
     headers: webhookHeaders(),
     body: JSON.stringify({ image_tag: IMAGE_V1 }),
@@ -21,7 +21,7 @@ beforeAll(async () => {
   completedJobId = successBody.job_id
 
   // Failed deploy: nonexistent image fails at pull in ~3s, no rollout runs
-  const failRes = await fetch(`${BASE_URL}/deploy/hello-world`, {
+  const failRes = await fetch(`${BASE_URL}/deploy`, {
     method: 'POST',
     headers: adminHeaders(),
     body: JSON.stringify({ image_tag: NONEXISTENT_IMAGE }),
@@ -45,7 +45,7 @@ describe('jobs API', () => {
     const job = await res.json() as Record<string, unknown>
     expect(job.id).toBe(completedJobId)
     expect(job.status).toBe('success')
-    expect(job.app).toBe('hello-world')
+    expect(job.app).toBe(APP_NAME)
     expect(job.image_tag).toBe(IMAGE_V1)
     expect(job.created_at).toBeTruthy()
     expect(job.updated_at).toBeTruthy()
@@ -89,11 +89,11 @@ describe('jobs API', () => {
   })
 
   it('?app filter returns only jobs for that app', async () => {
-    const res = await fetch(`${BASE_URL}/jobs?app=hello-world`, { headers: adminHeaders() })
+    const res = await fetch(`${BASE_URL}/jobs?app=${APP_NAME}`, { headers: adminHeaders() })
     expect(res.status).toBe(200)
     const jobs = await res.json() as Array<{ app: string, id: string }>
     expect(jobs.length).toBeGreaterThan(0)
-    for (const j of jobs) expect(j.app).toBe('hello-world')
+    for (const j of jobs) expect(j.app).toBe(APP_NAME)
     expect(jobs.some(j => j.id === completedJobId)).toBe(true)
   })
 
@@ -123,11 +123,11 @@ describe('jobs API', () => {
   })
 
   it('?app and ?status can be combined', async () => {
-    const res = await fetch(`${BASE_URL}/jobs?app=hello-world&status=success`, { headers: adminHeaders() })
+    const res = await fetch(`${BASE_URL}/jobs?app=${APP_NAME}&status=success`, { headers: adminHeaders() })
     expect(res.status).toBe(200)
     const jobs = await res.json() as Array<{ app: string, status: string }>
     jobs.forEach((j) => {
-      expect(j.app).toBe('hello-world')
+      expect(j.app).toBe(APP_NAME)
       expect(j.status).toBe('success')
     })
   })
@@ -138,7 +138,7 @@ describe('jobs API', () => {
     const job = await res.json() as Record<string, unknown>
     expect(job.id).toBe(completedJobId)
     expect(job.status).toBe('success')
-    expect(job.app).toBe('hello-world')
+    expect(job.app).toBe(APP_NAME)
   })
 
   it('webhook token can stream /jobs/:id/logs', async () => {
@@ -149,7 +149,7 @@ describe('jobs API', () => {
 
   it('webhook token can poll a job to completion (single-token CI journey)', async () => {
     // Deploy with webhook token and poll with the same token — mirrors rollhook-action behavior
-    const deployRes = await fetch(`${BASE_URL}/deploy/hello-world`, {
+    const deployRes = await fetch(`${BASE_URL}/deploy`, {
       method: 'POST',
       headers: webhookHeaders(),
       body: JSON.stringify({ image_tag: IMAGE_V1 }),

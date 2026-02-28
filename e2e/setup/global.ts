@@ -27,7 +27,11 @@ export async function setup(): Promise<void> {
   execSync(`lsof -ti :7700 | xargs kill -9 2>/dev/null || true`)
 
   // Build the RollHook Docker image from the monorepo root so E2E runs the real container
-  execSync(`docker build -t rollhook-e2e-server:latest ${ROOT}`, { stdio: 'inherit' })
+  // Dockerfile lives at apps/server/Dockerfile; build context is the repo root
+  execSync(
+    `docker build -t rollhook-e2e-server:latest -f ${ROOT}/apps/server/Dockerfile ${ROOT}`,
+    { stdio: 'inherit' },
+  )
 
   // Start infrastructure (Traefik + local registry) and RollHook container
   composeE2E('up -d')

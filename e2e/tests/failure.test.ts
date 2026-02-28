@@ -10,7 +10,7 @@ let failedJob: JobResult
 beforeAll(async () => {
   // Synchronous deploy: endpoint blocks until job completes and returns HTTP 500 on failure.
   // No need to poll afterward — the job is already in terminal state when we get the response.
-  const res = await fetch(`${BASE_URL}/deploy/hello-world`, {
+  const res = await fetch(`${BASE_URL}/deploy`, {
     method: 'POST',
     headers: adminHeaders(),
     body: JSON.stringify({ image_tag: NONEXISTENT_IMAGE }),
@@ -30,7 +30,7 @@ describe('failed deployment lifecycle', () => {
 
   it('failed job has error field populated with docker pull message', () => {
     expect(failedJob.error).toBeTruthy()
-    expect(failedJob.error).toContain('docker pull failed')
+    expect(failedJob.error).toContain('Docker pull failed')
   })
 
   it('job logs contain pull step and executor error but not rollout', async () => {

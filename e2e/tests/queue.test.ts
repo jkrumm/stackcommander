@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adminHeaders, BASE_URL, getContainerCount, pollJobUntilDone, REGISTRY_HOST, webhookHeaders } from '../setup/fixtures.ts'
+import { adminHeaders, APP_NAME, BASE_URL, getContainerCount, pollJobUntilDone, REGISTRY_HOST, webhookHeaders } from '../setup/fixtures.ts'
 
 const IMAGE_V1 = `${REGISTRY_HOST}/rollhook-e2e-hello:v1`
 
@@ -8,12 +8,12 @@ describe('job queue', () => {
     // Fire two async deploys simultaneously — both enter the queue before either starts running.
     // This validates that the FIFO queue accepts concurrent requests and processes them in order.
     const [res1, res2] = await Promise.all([
-      fetch(`${BASE_URL}/deploy/hello-world?async=true`, {
+      fetch(`${BASE_URL}/deploy?async=true`, {
         method: 'POST',
         headers: webhookHeaders(),
         body: JSON.stringify({ image_tag: IMAGE_V1 }),
       }),
-      fetch(`${BASE_URL}/deploy/hello-world?async=true`, {
+      fetch(`${BASE_URL}/deploy?async=true`, {
         method: 'POST',
         headers: webhookHeaders(),
         body: JSON.stringify({ image_tag: IMAGE_V1 }),
@@ -53,7 +53,7 @@ describe('job queue', () => {
 
   it('queued jobs are listed with correct status before processing', async () => {
     // Fire a slow successful deploy (blocks for ~16s) then immediately check the list
-    const slowRes = await fetch(`${BASE_URL}/deploy/hello-world?async=true`, {
+    const slowRes = await fetch(`${BASE_URL}/deploy?async=true`, {
       method: 'POST',
       headers: webhookHeaders(),
       body: JSON.stringify({ image_tag: IMAGE_V1 }),
@@ -62,7 +62,7 @@ describe('job queue', () => {
     const { job_id: slowJobId } = await slowRes.json() as { job_id: string }
 
     // While the first job is running, verify GET /jobs returns it with queued or running status
-    const listRes = await fetch(`${BASE_URL}/jobs?app=hello-world&limit=5`, { headers: adminHeaders() })
+    const listRes = await fetch(`${BASE_URL}/jobs?app=${APP_NAME}&limit=5`, { headers: adminHeaders() })
     expect(listRes.status).toBe(200)
     const listedJobs = await listRes.json() as Array<{ id: string, status: string }>
     const listed = listedJobs.find(j => j.id === slowJobId)
