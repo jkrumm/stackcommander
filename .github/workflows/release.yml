@@ -171,5 +171,6 @@ jobs:
         with:
           url: ${{ secrets.ROLLHOOK_URL }}
           token: ${{ secrets.ROLLHOOK_WEBHOOK_TOKEN }}
+          admin_token: ${{ secrets.ROLLHOOK_ADMIN_TOKEN }}
           app: rollhook-marketing
           image_tag: registry.jkrumm.com/private/rollhook-marketing:${{ needs.release.outputs.version }}
