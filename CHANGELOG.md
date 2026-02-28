@@ -1,3 +1,11 @@
+## [1.4.1](https://github.com/jkrumm/rollhook/compare/v1.4.0...v1.4.1) (2026-02-28)
+
+
+### Bug Fixes
+
+* **ci:** show response body on failed deploy webhook curl ([569f3cc](https://github.com/jkrumm/rollhook/commit/569f3cc2b09dea7e9827fd5f87180d4e21c58bdf))
+* **infra:** add NETWORKS=1 and registry credential mount to socket proxy reference ([386cddd](https://github.com/jkrumm/rollhook/commit/386cddd5340a470813df7912ce28fce5a9697507))
+
 # [1.4.0](https://github.com/jkrumm/rollhook/compare/v1.3.0...v1.4.0) (2026-02-27)
 
 
