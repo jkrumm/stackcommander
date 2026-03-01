@@ -9,7 +9,7 @@ const ROOT = join(DIR, '..')
 const OUTPUT = join(ROOT, 'apps/dashboard/src/demo/data.json')
 
 const BASE_URL = 'http://localhost:7700'
-const TOKEN = process.env.ADMIN_TOKEN ?? 'e2e-admin-token'
+const TOKEN = process.env.ROLLHOOK_SECRET ?? 'e2e-secret-token'
 
 async function fetchLogs(jobId: string): Promise<string[]> {
   const res = await fetch(`${BASE_URL}/jobs/${jobId}/logs`, {

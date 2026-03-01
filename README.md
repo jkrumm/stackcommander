@@ -88,8 +88,7 @@ services:
     depends_on:
       - socket-proxy
     environment:
-      ADMIN_TOKEN: ${ADMIN_TOKEN}
-      WEBHOOK_TOKEN: ${WEBHOOK_TOKEN}
+      ROLLHOOK_SECRET: ${ROLLHOOK_SECRET}
       DOCKER_HOST: tcp://socket-proxy:2375
       # Optional: Pushover mobile notifications
       # PUSHOVER_USER_KEY: ${PUSHOVER_USER_KEY}
@@ -148,7 +147,7 @@ See the [compose.yml requirements](#composeyml-requirements) section below for t
 
 ```bash
 curl -X POST https://your-vps:7700/deploy \
-  -H "Authorization: Bearer $WEBHOOK_TOKEN" \
+  -H "Authorization: Bearer $ROLLHOOK_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"image_tag": "ghcr.io/you/my-api:abc123"}'
 
@@ -163,7 +162,7 @@ Stream logs (webhook or admin token):
 
 ```bash
 curl -N https://your-vps:7700/jobs/<job_id>/logs \
-  -H "Authorization: Bearer $WEBHOOK_TOKEN"
+  -H "Authorization: Bearer $ROLLHOOK_SECRET"
 ```
 
 ---
@@ -281,10 +280,7 @@ Interactive docs at `/openapi` (Scalar UI). Key routes:
 | `GET`  | `/health`        | none           | Returns `200 { "status": "ok", "version": "1.2.3" }` — suitable for Uptime Kuma, Traefik health checks, etc. |
 | `GET`  | `/openapi`       | none           | Scalar API docs                                                                                              |
 
-**Auth:** `Authorization: Bearer <token>` header.
-
-- `WEBHOOK_TOKEN` — deploy endpoint only
-- `ADMIN_TOKEN` — all endpoints
+**Auth:** `Authorization: Bearer <ROLLHOOK_SECRET>` header — single token, all routes.
 
 ---
 
@@ -309,8 +305,7 @@ Notification failures are written to the job log — they never affect job statu
 
 | Variable                   | Required | Description                                                                                     |
 | -------------------------- | -------- | ----------------------------------------------------------------------------------------------- |
-| `ADMIN_TOKEN`              | yes      | Bearer token for admin API access                                                               |
-| `WEBHOOK_TOKEN`            | yes      | Bearer token for deploy webhook calls                                                           |
+| `ROLLHOOK_SECRET`          | yes      | Bearer token (min 7 chars) — all routes                                                         |
 | `DOCKER_HOST`              | no       | Docker daemon endpoint (e.g. `tcp://socket-proxy:2375`). Defaults to the local socket if unset. |
 | `PORT`                     | no       | Port to listen on (default: `7700`)                                                             |
 | `PUSHOVER_USER_KEY`        | no       | Pushover user key for mobile notifications                                                      |
@@ -323,7 +318,7 @@ Notification failures are written to the job log — they never affect job statu
 
 ### Threat model
 
-When using a direct socket mount, RollHook has effective root access on the Docker host via `/var/run/docker.sock`. A compromised `WEBHOOK_TOKEN` means an attacker can trigger arbitrary deployments with any image tag — treat it with the same sensitivity as an SSH private key.
+When using a direct socket mount, RollHook has effective root access on the Docker host via `/var/run/docker.sock`. A compromised `ROLLHOOK_SECRET` means an attacker can trigger arbitrary deployments with any image tag — treat it with the same sensitivity as an SSH private key.
 
 ### Docker socket access
 
@@ -354,11 +349,9 @@ openssl rand -hex 32
 
 Never expose port 7700 directly to the internet. Always place RollHook behind a reverse proxy with TLS termination — Cloudflare Tunnel, Caddy, Traefik, or nginx. Plaintext HTTP exposes your bearer token on every request.
 
-### Admin endpoint scope
+### Token scope
 
-`ADMIN_TOKEN` should never leave the server — it has full API access including job logs and registry mutation. If you run behind a reverse proxy, consider blocking `/jobs`, `/registry`, and `/openapi` from external networks and only exposing `/deploy` and `/health` to CI.
-
-`WEBHOOK_TOKEN` is the only credential that needs to exist in CI secrets. It covers `POST /deploy`, `GET /jobs/:id`, and `GET /jobs/:id/logs` — the full CI journey of trigger → poll → stream.
+`ROLLHOOK_SECRET` is the only credential. Store it as a CI secret — it covers the full CI journey: `POST /deploy`, `GET /jobs/:id`, and `GET /jobs/:id/logs`. If you run behind a reverse proxy, consider blocking `/jobs`, `/registry`, and `/openapi` from external networks and only exposing `/deploy` and `/health` to CI.
 
 ### Bun baseline image
 
@@ -400,7 +393,7 @@ Use the official [rollhook-action](https://github.com/jkrumm/rollhook-action) fo
 - uses: jkrumm/rollhook-action@v1
   with:
     url: https://rollhook.example.com
-    token: ${{ secrets.ROLLHOOK_WEBHOOK_TOKEN }}
+    token: ${{ secrets.ROLLHOOK_SECRET }}
     image_tag: registry.example.com/my-api:${{ github.sha }}
 ```
 
@@ -415,7 +408,7 @@ The action POSTs the deploy trigger, then streams SSE logs live to the CI run an
 - name: Deploy
   run: |
     curl --fail-with-body -sS -X POST ${{ secrets.ROLLHOOK_URL }}/deploy \
-      -H "Authorization: Bearer ${{ secrets.ROLLHOOK_WEBHOOK_TOKEN }}" \
+      -H "Authorization: Bearer ${{ secrets.ROLLHOOK_SECRET }}" \
       -H "Content-Type: application/json" \
       -d '{"image_tag": "${{ env.REGISTRY }}/my-api:${{ github.sha }}"}'
 ```
@@ -457,7 +450,7 @@ The following scenarios are not covered by the current test suite. They are trac
 
 ### MVP
 
-- [x] Bearer auth (`ADMIN_TOKEN` + `WEBHOOK_TOKEN` env vars, two roles)
+- [x] Bearer auth (`ROLLHOOK_SECRET` env var, single token)
 - [x] `POST /deploy` — accepts `image_tag`, derives app name, returns `job_id`
 - [x] `GET /jobs/:id` — status + metadata
 - [x] `GET /jobs/:id/logs` — SSE stream from `data/logs/<id>.log`

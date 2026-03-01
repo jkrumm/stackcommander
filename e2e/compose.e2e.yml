@@ -29,8 +29,7 @@ services:
     ports:
       - '7700:7700'
     environment:
-      ADMIN_TOKEN: ${ADMIN_TOKEN}
-      WEBHOOK_TOKEN: ${WEBHOOK_TOKEN}
+      ROLLHOOK_SECRET: ${ROLLHOOK_SECRET}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - type: bind

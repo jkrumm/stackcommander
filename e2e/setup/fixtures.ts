@@ -24,15 +24,14 @@ export function getContainerCount(nameFilter: string = CONTAINER_NAME_FILTER): n
   }
 }
 
-export const ADMIN_TOKEN = 'e2e-admin-token'
-export const WEBHOOK_TOKEN = 'e2e-webhook-token'
+export const ROLLHOOK_SECRET = 'e2e-secret-token'
 
 export function adminHeaders(): HeadersInit {
-  return { 'Authorization': `Bearer ${ADMIN_TOKEN}`, 'Content-Type': 'application/json' }
+  return { 'Authorization': `Bearer ${ROLLHOOK_SECRET}`, 'Content-Type': 'application/json' }
 }
 
 export function webhookHeaders(): HeadersInit {
-  return { 'Authorization': `Bearer ${WEBHOOK_TOKEN}`, 'Content-Type': 'application/json' }
+  return { 'Authorization': `Bearer ${ROLLHOOK_SECRET}`, 'Content-Type': 'application/json' }
 }
 
 export type { JobResult }

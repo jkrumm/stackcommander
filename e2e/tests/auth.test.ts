@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ADMIN_TOKEN, adminHeaders, BASE_URL, REGISTRY_HOST, WEBHOOK_TOKEN, webhookHeaders } from '../setup/fixtures.ts'
+import { adminHeaders, BASE_URL, REGISTRY_HOST, ROLLHOOK_SECRET, webhookHeaders } from '../setup/fixtures.ts'
 
 // Use a non-existent tag so the deploy job fails at the pull step — no rollout runs,
 // no new container is created, and the queue clears in seconds instead of ~16s per rollout.
@@ -11,9 +11,9 @@ describe('authentication', () => {
     expect(res.status).toBe(401)
   })
 
-  it('webhook token on GET /jobs → 200', async () => {
+  it('secret on GET /jobs → 200', async () => {
     const res = await fetch(`${BASE_URL}/jobs`, {
-      headers: { Authorization: `Bearer ${WEBHOOK_TOKEN}` },
+      headers: { Authorization: `Bearer ${ROLLHOOK_SECRET}` },
     })
     expect(res.status).toBe(200)
   })
@@ -52,7 +52,7 @@ describe('authentication', () => {
 
   it('invalid Authorization format → 401', async () => {
     const res = await fetch(`${BASE_URL}/jobs`, {
-      headers: { Authorization: `Basic ${ADMIN_TOKEN}` },
+      headers: { Authorization: `Basic ${ROLLHOOK_SECRET}` },
     })
     expect(res.status).toBe(401)
   })
@@ -76,7 +76,7 @@ describe('authentication', () => {
     const { job_id } = body
 
     const res = await fetch(`${BASE_URL}/jobs/${job_id}`, {
-      headers: { Authorization: `Bearer ${WEBHOOK_TOKEN}` },
+      headers: { Authorization: `Bearer ${ROLLHOOK_SECRET}` },
     })
     expect(res.status).not.toBe(401)
     expect(res.status).not.toBe(403)

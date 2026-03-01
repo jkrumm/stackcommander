@@ -150,12 +150,11 @@ OpenAPI (Scalar UI): `@elysiajs/openapi` — served at `/openapi`, JSON spec at 
 
 ## Auth
 
-Two bearer token roles, set via environment variables (never in config files):
+Single bearer token, set via environment variable (never in config files). Min 7 characters, validated at startup.
 
-| Env var         | Role      | Allowed routes                                        |
-| --------------- | --------- | ----------------------------------------------------- |
-| `ADMIN_TOKEN`   | `admin`   | All routes                                            |
-| `WEBHOOK_TOKEN` | `webhook` | `POST /deploy`, `GET /jobs/:id`, `GET /jobs/:id/logs` |
+| Env var           | Required | Allowed routes |
+| ----------------- | -------- | -------------- |
+| `ROLLHOOK_SECRET` | yes      | All routes     |
 
 ---
 
@@ -165,8 +164,7 @@ All configuration via environment variables — no config file:
 
 | Env var                    | Required | Purpose                                      |
 | -------------------------- | -------- | -------------------------------------------- |
-| `ADMIN_TOKEN`              | yes      | Admin bearer token                           |
-| `WEBHOOK_TOKEN`            | yes      | Webhook bearer token                         |
+| `ROLLHOOK_SECRET`          | yes      | Bearer token (min 7 chars), all routes       |
 | `DOCKER_HOST`              | no       | Docker socket (default: local socket)        |
 | `PUSHOVER_USER_KEY`        | no       | Pushover user key for mobile notifications   |
 | `PUSHOVER_APP_TOKEN`       | no       | Pushover app token for mobile notifications  |

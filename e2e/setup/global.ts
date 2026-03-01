@@ -2,7 +2,7 @@ import { execSync } from 'node:child_process'
 import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { ADMIN_TOKEN, REGISTRY_HOST, WEBHOOK_TOKEN } from './fixtures.ts'
+import { REGISTRY_HOST, ROLLHOOK_SECRET } from './fixtures.ts'
 
 const DIR = fileURLToPath(new URL('.', import.meta.url))
 const ROOT = join(DIR, '../..')
@@ -14,7 +14,7 @@ function composeE2E(args: string, extraEnv?: Record<string, string>): void {
     `docker compose -f ${E2E_DIR}/compose.e2e.yml --project-name rollhook-e2e ${args}`,
     {
       stdio: 'inherit',
-      env: { ...process.env, PROJECT_ROOT: ROOT, ADMIN_TOKEN, WEBHOOK_TOKEN, ...extraEnv },
+      env: { ...process.env, PROJECT_ROOT: ROOT, ROLLHOOK_SECRET, ...extraEnv },
     },
   )
 }

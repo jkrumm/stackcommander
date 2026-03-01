@@ -3,6 +3,12 @@ import { app } from '@/app'
 import { waitForQueueDrain } from '@/jobs/queue'
 import { startShutdown } from '@/state'
 
+const secret = process.env.ROLLHOOK_SECRET
+if (!secret || secret.length < 7) {
+  console.error('ROLLHOOK_SECRET must be set and at least 7 characters long.')
+  process.exit(1)
+}
+
 const port = Number(process.env.PORT ?? 7700)
 app.listen(port, () => {
   process.stdout.write(`RollHook running on http://localhost:${port}\n`)

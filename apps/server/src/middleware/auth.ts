@@ -3,11 +3,10 @@ import { Elysia } from 'elysia'
 
 export type Role = 'admin' | 'webhook'
 
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN
-const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN
+const ROLLHOOK_SECRET = process.env.ROLLHOOK_SECRET
 
-if (!ADMIN_TOKEN || !WEBHOOK_TOKEN) {
-  throw new Error('ADMIN_TOKEN and WEBHOOK_TOKEN environment variables are required')
+if (!ROLLHOOK_SECRET) {
+  throw new Error('ROLLHOOK_SECRET environment variable is required')
 }
 
 // No `name` on the Elysia instance to prevent plugin deduplication: Elysia
@@ -16,7 +15,7 @@ if (!ADMIN_TOKEN || !WEBHOOK_TOKEN) {
 // `{ as: 'local' }` keeps the hook scoped to THIS instance only — no upward
 // propagation. Routes MUST be chained onto the requireRole(...) return value
 // (not onto a parent after .use()) so the hook and routes share the same instance.
-export function requireRole(role: Role) {
+export function requireRole(_role: Role) {
   return new Elysia()
     .onBeforeHandle({ as: 'local' }, ({ headers, set }) => {
       const authHeader = headers.authorization
@@ -27,12 +26,7 @@ export function requireRole(role: Role) {
 
       const token = authHeader.slice(7)
 
-      if (role === 'admin' && token !== ADMIN_TOKEN) {
-        set.status = 403
-        return { message: 'Admin token required' }
-      }
-
-      if (role === 'webhook' && token !== ADMIN_TOKEN && token !== WEBHOOK_TOKEN) {
+      if (token !== ROLLHOOK_SECRET) {
         set.status = 403
         return { message: 'Valid token required' }
       }

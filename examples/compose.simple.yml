@@ -10,8 +10,7 @@
 #
 # Required environment variables (set in your shell or a .env file):
 #   DOMAIN=example.com
-#   ADMIN_TOKEN=$(openssl rand -hex 32)
-#   WEBHOOK_TOKEN=$(openssl rand -hex 32)
+#   ROLLHOOK_SECRET=$(openssl rand -hex 32)
 #
 # RollHook also needs to read and run your app's compose files.
 # Mount the directory where your stacks live so compose file paths from Docker
@@ -82,8 +81,7 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      ADMIN_TOKEN: ${ADMIN_TOKEN}
-      WEBHOOK_TOKEN: ${WEBHOOK_TOKEN}
+      ROLLHOOK_SECRET: ${ROLLHOOK_SECRET}
       # Optional notifications:
       # PUSHOVER_USER_KEY: ${PUSHOVER_USER_KEY}
       # PUSHOVER_APP_TOKEN: ${PUSHOVER_APP_TOKEN}
