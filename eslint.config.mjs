@@ -11,6 +11,7 @@ export default antfu({
     '**/node_modules/**',
     'apps/marketing/.astro/**',
     'apps/server/public/**',
+    'docs/**',
   ],
 })
   .override('antfu/react/rules', {
