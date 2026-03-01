@@ -1,16 +1,22 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	"github.com/jkrumm/rollhook/internal/api"
+	"github.com/jkrumm/rollhook/internal/registry"
 )
 
 const scalarHTML = `<!doctype html>
@@ -26,6 +32,20 @@ func main() {
 	secret := os.Getenv("ROLLHOOK_SECRET")
 	if len(secret) < 7 {
 		log.Fatal("ROLLHOOK_SECRET must be set and at least 7 characters")
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	dataDir := os.Getenv("DATA_DIR")
+	if dataDir == "" {
+		dataDir = "data"
+	}
+
+	// Start Zot registry subprocess before opening the HTTP port.
+	mgr := registry.NewManager(dataDir, secret)
+	if err := mgr.Start(ctx); err != nil {
+		log.Fatalf("failed to start registry: %v", err)
 	}
 
 	r := chi.NewRouter()
@@ -67,13 +87,34 @@ func main() {
 	api.RegisterDeploy(humaAPI)
 	api.RegisterJobs(humaAPI)
 
+	// OCI distribution routes — proxied to internal Zot (127.0.0.1:5000).
+	// Chi wildcard handles all nested paths correctly (unlike Elysia 1.4 .all()).
+	proxyHandler := registry.NewProxy("http://127.0.0.1:5000", secret)
+	r.Handle("/v2", proxyHandler)
+	r.Handle("/v2/", proxyHandler)
+	r.Handle("/v2/*", proxyHandler)
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "7700"
 	}
 
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: r,
+	}
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+		_ = mgr.Stop()
+	}()
+
 	slog.Info("RollHook starting", "port", port)
-	if err := http.ListenAndServe(":"+port, r); err != nil {
+	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
+	slog.Info("RollHook stopped")
 }

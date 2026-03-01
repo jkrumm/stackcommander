@@ -138,3 +138,39 @@ Bearer token auth middleware, huma v2 + Chi wiring with OpenAPI 3.1 spec at `/op
 ### Future improvements
 - `ListServiceContainers` could accept a `running bool` parameter to switch between `All: true`/`false` when the rollout step's needs are clearer.
 - The `bufio.Scanner` default buffer (64KB) is sufficient for all known NDJSON pull events; no need to increase unless very large layer digests appear.
+
+---
+
+## Group 5: Zot Process Manager + Streaming OCI Proxy
+
+### What was implemented
+`internal/registry/config.go`: typed structs for Zot JSON config generation (deterministic key order), bcrypt htpasswd generation at cost 12 via `golang.org/x/crypto/bcrypt`. `internal/registry/manager.go`: `Manager` struct that writes config/htpasswd, launches `zot serve` as a child process, pipes stdout/stderr line-by-line via `bufio.Scanner`, and polls `/v2/` until ready. Single watcher goroutine owns `cmd.Wait()` — `Stop()` sends SIGTERM and waits on a `done` channel. `internal/registry/proxy.go`: `validateProxyAuth` supporting Bearer + Basic (any username), `NewProxy` returning an `httputil.ReverseProxy`-backed handler with hop-by-hop header stripping, Zot Basic auth injection, and Location header rewriting. `cmd/rollhook/main.go` updated: registry manager started before HTTP listener, `/v2` + `/v2/` + `/v2/*` chi routes wired, graceful shutdown via `signal.NotifyContext` + `srv.Shutdown`.
+
+### Deviations from prompt
+- **Typed structs for config** instead of `map[string]any`: gives deterministic JSON key ordering (cleaner config file) and documents the schema in code. `json.MarshalIndent` on a struct vs a map produces the same valid output but with stable ordering.
+- **`golang.org/x/crypto` added as direct dependency** at v0.48.0 (latest compatible with go 1.24.1). It was previously in go.sum only as an indirect transitive dep.
+- **`DATA_DIR` env var** added to `main.go` for the data directory (defaults to `"data"`). Mirrors what the manager needs; avoids hardcoding `"data"` in both places.
+- **`signal.NotifyContext` + `srv.Shutdown` in main.go** instead of `http.ListenAndServe`: implements graceful shutdown so the HTTP server drains in-flight requests and the registry manager is stopped cleanly on SIGTERM/SIGINT.
+
+### Gotchas & surprises
+- **`cmd.Wait()` may only be called once**: if both the watcher goroutine and `Stop()` each call `Wait()`, the second call returns an error ("waitid: no child processes"). Solution: single watcher goroutine owns `Wait()`; `Stop()` sends SIGTERM and blocks on a `done` channel that the watcher closes.
+- **`httputil.ReverseProxy` already strips most hop-by-hop headers** (Connection, Keep-Alive, TE, Trailers, Transfer-Encoding, Upgrade) since Go 1.17. Explicitly stripping them in `Director` is redundant but harmless and matches the TypeScript proxy exactly.
+- **`originalDirector` capture**: overriding `proxy.Director` after calling `httputil.NewSingleHostReverseProxy` requires capturing the original director first and calling it in the new director. Forgetting this means the request URL is never rewritten to the target host.
+- **`exec.CommandContext` avoided**: using the context to kill Zot gives no opportunity for graceful SIGTERM → wait → SIGKILL sequence. Using `exec.Command` and managing the lifecycle manually in `Stop()` gives full control.
+
+### Security notes
+- `config.json` and `.htpasswd` written with mode `0o600` (owner read/write only) — no world-readable credentials.
+- `registry/` data directory created with `0o755` — Zot process (same user) can read/write blobs.
+- Zot binds `127.0.0.1:5000` exclusively — not reachable from outside the container.
+- `validateProxyAuth` uses `strings.CutPrefix` for both Bearer and Basic — rejects requests where the scheme prefix is absent (same protection as auth middleware Groups 1–2).
+- `writeUnauthorized` returns the OCI distribution spec error body format so Docker CLI shows a meaningful error instead of a generic 401.
+
+### Tests added
+- `internal/registry/config_test.go`: `TestGenerateZotConfig_ContainsDockerCompat`, `TestGenerateZotConfig_LoopbackAddress`, `TestGenerateZotConfig_PortAsString`, `TestGenerateHtpasswd_Format`, `TestGenerateHtpasswd_VerifiesCorrectly` (5 tests)
+- `internal/registry/proxy_test.go`: `TestValidateProxyAuth_Bearer`, `TestValidateProxyAuth_Basic_AnyUsername` (4 username variants), `TestValidateProxyAuth_InvalidToken` (4 subtypes), `TestValidateProxyAuth_Missing` (4 tests)
+- Total registry tests: 9/9 pass. Full suite: 32/32 pass.
+
+### Future improvements
+- Manager integration test (requires Zot binary in PATH): start manager, hit `/v2/`, verify 401, stop manager. Currently only unit tests.
+- `DataDir` could be exposed as a field or method on `Manager` so callers don't need to track it separately.
+- Consider a `Manager.Addr()` method returning `"http://127.0.0.1:5000"` so `main.go` doesn't hardcode the port.
