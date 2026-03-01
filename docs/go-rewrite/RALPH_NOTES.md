@@ -100,3 +100,41 @@ Bearer token auth middleware, huma v2 + Chi wiring with OpenAPI 3.1 spec at `/op
 - `Store` could be extended with a `DB() *sql.DB` accessor for raw queries in tests or migrations.
 - Consider using `time.Now().UTC().Round(time.Second)` in Insert to avoid sub-second precision that varies between systems.
 - A `Ping()` wrapper in `Open()` would catch open-but-unusable databases (e.g., permission errors that don't surface until first query).
+
+---
+
+## Group 4: Docker SDK Integration
+
+### What was implemented
+`internal/docker/client.go`: `NewClient()` wraps `client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())`. `internal/docker/api.go`: `ListRunningContainers`, `ListServiceContainers` (all states, label-filtered), `InspectContainer`, `StopContainer`, `RemoveContainer`, `PullImage` — all using the official Docker Go SDK. Pull streaming uses `bufio.Scanner` + NDJSON parsing with high-signal filter (same 5 prefixes as TypeScript). X-Registry-Auth injected for localhost registries via base64-encoded JSON credentials. `internal/docker/api_test.go`: 7 unit tests + 2 integration tests (auto-skipped if Docker unavailable).
+
+### Deviations from prompt
+- **`ListServiceContainers` uses `All: true`**: The prompt didn't specify, and the TypeScript default was running-only. Set `All: true` so rollout health polling can see newly scaled replicas in "created"/"starting" state before they become "running". Caller can filter by state if needed.
+- **`buildRegistryAuth` uses `json.Marshal` + `base64.StdEncoding`** instead of `registry.EncodeAuthConfig`: avoids importing an additional sub-package; the JSON structure is identical and tested explicitly.
+- **No `parseImageTag` helper**: The TypeScript split `fromImage`/`tag` because it called the Docker API directly with query params. The Go SDK's `ImagePull` takes a full reference string (e.g. `"image:tag"`) and splits internally — no manual splitting needed.
+
+### Gotchas & surprises
+- **Docker SDK v28 type names changed**: `ContainerList` returns `[]container.Summary` (not `[]types.Container`), `ContainerInspect` returns `container.InspectResponse` (not `types.ContainerJSON`). All options types moved to `github.com/docker/docker/api/types/container` and `github.com/docker/docker/api/types/image` sub-packages.
+- **`errdefs` package**: `github.com/docker/docker/errdefs` provides `IsNotModified` (304) and `IsNotFound` (404) predicates for graceful handling of already-stopped/already-removed cases.
+- **`go mod tidy` pulled in many transitive deps** from the Docker SDK (OpenTelemetry, gRPC, etc.) — these are indirect and don't affect the binary size materially since CGO_ENABLED=0 strips unused symbols.
+
+### Security notes
+- Registry credentials are never logged — only the X-Registry-Auth encoded header value is passed to the Docker daemon, not printed to stdout/logs.
+- `buildRegistryAuth` encodes with `base64.StdEncoding` (not URL-safe encoding) — this matches the Docker daemon's expectation for the `X-Registry-Auth` header.
+
+### Tests added
+- `internal/docker/api_test.go`:
+  - `TestIsLocalhost` — 8 cases: localhost:*, 127.0.0.1:*, external registries, no-host images
+  - `TestExtractHost` — 6 cases: various image tag formats
+  - `TestBuildRegistryAuth` — verifies base64+JSON round-trip with correct field names
+  - `TestParsePullStream/forwards_high-signal_events_only` — 4 events pass, 2 filtered
+  - `TestParsePullStream/already_exists_events_pass_through`
+  - `TestParsePullStream/returns_error_on_pull_error_event`
+  - `TestParsePullStream/skips_malformed_NDJSON_lines`
+  - `TestParsePullStream/skips_blank_lines`
+  - `TestListRunningContainers_Integration` — auto-skips if Docker unavailable
+  - `TestPullImage_Integration` — pulls hello-world:latest, verifies at least one log line
+
+### Future improvements
+- `ListServiceContainers` could accept a `running bool` parameter to switch between `All: true`/`false` when the rollout step's needs are clearer.
+- The `bufio.Scanner` default buffer (64KB) is sufficient for all known NDJSON pull events; no need to increase unless very large layer digests appear.
