@@ -1,7 +1,7 @@
 services:
   hello-world:
     # IMAGE_TAG is the full image URI — written by RollHook before each deploy
-    image: ${IMAGE_TAG:-localhost:5001/rollhook-e2e-hello:v1}
+    image: ${IMAGE_TAG:-localhost:7700/rollhook-e2e-hello:v1}
     environment:
       PORT: '3000'
     healthcheck:

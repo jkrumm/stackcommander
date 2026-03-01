@@ -5,6 +5,7 @@ import { Elysia } from 'elysia'
 import { deployApi } from '@/api/deploy'
 import { healthApi } from '@/api/health'
 import { jobsApi } from '@/api/jobs'
+import { registryProxy } from '@/registry/proxy'
 
 const publicDir = join(import.meta.dir, '../public')
 const assetsDir = resolve(publicDir, 'assets')
@@ -24,6 +25,7 @@ export const app = new Elysia()
   .use(healthApi)
   .use(deployApi)
   .use(jobsApi)
+  .use(registryProxy)
   // Hashed static assets (JS, CSS, fonts) — path traversal hardened
   .get('/assets/*', ({ params }) => {
     const requested = params['*'] ?? ''
