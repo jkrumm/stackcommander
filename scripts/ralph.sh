@@ -23,7 +23,7 @@ LOGS_DIR="$REPO_ROOT/.ralph-logs"
 REPORT_FILE="$DOCS_DIR/RALPH_REPORT.md"
 
 MAX_RETRIES=3
-CLAUDE_TIMEOUT=1800  # 30 minutes per group
+CLAUDE_TIMEOUT=3600  # 60 minutes per group
 
 # ── Colors ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'

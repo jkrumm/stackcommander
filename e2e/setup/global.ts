@@ -66,9 +66,10 @@ export async function setup(): Promise<void> {
   execSync(`docker push ${REGISTRY_HOST}/rollhook-e2e-hello:v2`, { stdio: 'inherit' })
 
   // Start hello-world app at v1
-  // compose.yml default `${IMAGE_TAG:-localhost:7700/rollhook-e2e-hello:v1}` handles initial startup
+  // Pass IMAGE_TAG explicitly — a stale .env file in the project dir could override the compose default
   execSync(`docker compose --project-directory ${HELLO_WORLD_DIR} up -d`, {
     stdio: 'inherit',
+    env: { ...process.env, IMAGE_TAG: `${REGISTRY_HOST}/rollhook-e2e-hello:v1` },
   })
 
   // Wait for hello-world to be routable through Traefik before starting any tests.
