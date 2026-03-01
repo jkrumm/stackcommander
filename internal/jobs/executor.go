@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 	"github.com/jkrumm/rollhook/internal/db"
 	"github.com/jkrumm/rollhook/internal/jobs/steps"
+	"github.com/jkrumm/rollhook/internal/notifier"
 )
 
 // Executor orchestrates sequential job execution via the internal queue.
@@ -110,6 +112,15 @@ func (e *Executor) run(job db.Job) {
 	if err := e.store.UpdateStatus(job.ID, finalStatus, finalErr); err != nil {
 		slog.Error("update job status failed", "job", job.ID, "err", err)
 	}
+
+	notifyJob := job
+	notifyJob.Status = finalStatus
+	notifyJob.Error = finalErr
+	notifier.Notify(context.Background(), notifier.Config{
+		PushoverUserKey:  os.Getenv("PUSHOVER_USER_KEY"),
+		PushoverAppToken: os.Getenv("PUSHOVER_APP_TOKEN"),
+		WebhookURL:       os.Getenv("NOTIFICATION_WEBHOOK_URL"),
+	}, notifyJob)
 }
 
 func (e *Executor) execute(ctx context.Context, job db.Job, log func(string)) error {
@@ -133,7 +144,15 @@ func (e *Executor) execute(ctx context.Context, job db.Job, log func(string)) er
 	}
 	log(fmt.Sprintf("[validate] OK — %s", result.ComposePath))
 
-	// Pull + rollout implemented in Group 7
-	log("[executor] waiting for Group 7 implementation (pull + rollout)")
+	// Step 3: Pull
+	if err := steps.Pull(ctx, e.docker, job.ImageTag, e.secret, log); err != nil {
+		return err
+	}
+
+	// Step 4: Rollout
+	if err := steps.Rollout(ctx, e.docker, result.ComposePath, result.Service, result.Project, job.ImageTag, log); err != nil {
+		return err
+	}
+
 	return nil
 }
