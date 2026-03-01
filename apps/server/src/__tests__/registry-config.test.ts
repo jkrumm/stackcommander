@@ -40,7 +40,12 @@ describe('generateZotConfig', () => {
 
   it('includes distSpecVersion', () => {
     const config = JSON.parse(generateZotConfig(opts))
-    expect(config.distSpecVersion).toBe('1.0.1')
+    expect(config.distSpecVersion).toBe('1.1.1')
+  })
+
+  it('enables docker2s2 compat mode', () => {
+    const config = JSON.parse(generateZotConfig(opts))
+    expect(config.http.compat).toEqual(['docker2s2'])
   })
 })
 

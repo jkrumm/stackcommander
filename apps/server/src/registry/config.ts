@@ -17,13 +17,14 @@ export function generateZotConfig(opts: {
 }): string {
   return JSON.stringify(
     {
-      distSpecVersion: '1.0.1',
+      distSpecVersion: '1.1.1',
       http: {
         address: '127.0.0.1',
         port: String(opts.port),
         auth: {
           htpasswd: { path: opts.htpasswdPath },
         },
+        compat: ['docker2s2'],
       },
       storage: {
         rootDirectory: opts.storageRoot,

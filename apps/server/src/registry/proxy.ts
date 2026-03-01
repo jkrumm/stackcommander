@@ -113,7 +113,16 @@ async function handleRegistryRequest(request: Request): Promise<Response> {
 // Handles all OCI distribution spec routes under /v2.
 // Docker clients send GET /v2/ first (discovery) — we return 401 with WWW-Authenticate
 // so Docker knows to use Basic auth. Subsequent requests are proxied to Zot.
+//
+// Elysia 1.4 quirk: .all('/v2/*') matches nothing (wildcard broken for nested paths).
+// Solution: use .all() for exact paths (/v2, /v2/) and per-method routes for wildcards.
+// GET also handles HEAD automatically; OCI DELETE uses .delete() for safety.
+const handler = ({ request }: { request: Request }) => handleRegistryRequest(request)
 export const registryProxy = new Elysia()
-  .all('/v2', ({ request }) => handleRegistryRequest(request))
-  .all('/v2/', ({ request }) => handleRegistryRequest(request))
-  .all('/v2/*', ({ request }) => handleRegistryRequest(request))
+  .all('/v2', handler)
+  .all('/v2/', handler)
+  .get('/v2/*', handler)
+  .post('/v2/*', handler)
+  .put('/v2/*', handler)
+  .patch('/v2/*', handler)
+  .delete('/v2/*', handler)

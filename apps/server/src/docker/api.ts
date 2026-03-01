@@ -32,7 +32,7 @@ export async function listServiceContainers(project: string, service: string): P
   return res.json() as Promise<ContainerSummary[]>
 }
 
-export async function pullImageStream(imageTag: string, logFn: (line: string) => void): Promise<void> {
+export async function pullImageStream(imageTag: string, logFn: (line: string) => void, xRegistryAuth?: string): Promise<void> {
   // Digest-only references (image@sha256:hash) are passed whole as fromImage.
   // For tagged references, split at the last colon after the last slash.
   let fromImage: string
@@ -60,6 +60,7 @@ export async function pullImageStream(imageTag: string, logFn: (line: string) =>
   const params = new URLSearchParams(tag !== undefined ? { fromImage, tag } : { fromImage })
   const res = await dockerFetch(`/images/create?${params}`, {
     method: 'POST',
+    headers: xRegistryAuth ? { 'X-Registry-Auth': xRegistryAuth } : undefined,
     signal: AbortSignal.timeout(10 * 60 * 1000), // 10 min — pulls can be slow for large images
   })
   if (!res.ok) {
