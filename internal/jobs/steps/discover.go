@@ -30,7 +30,7 @@ func Discover(ctx context.Context, cli *client.Client, imageTag string) (*Discov
 
 	match := FindMatchingContainer(containers, imageName)
 	if match == nil {
-		return nil, fmt.Errorf("no running container found matching image: %s", imageName)
+		return nil, fmt.Errorf("No running container found matching image: %s", imageName)
 	}
 
 	detail, err := dockerpkg.InspectContainer(ctx, cli, match.ID)

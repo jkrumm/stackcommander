@@ -22,9 +22,7 @@ type listJobsInput struct {
 }
 
 type listJobsOutput struct {
-	Body struct {
-		Jobs []db.Job `json:"jobs"`
-	}
+	Body []db.Job
 }
 
 type getJobInput struct {
@@ -54,7 +52,7 @@ func RegisterJobsAPI(humaAPI huma.API, store *db.Store) {
 			jobs = []db.Job{}
 		}
 		out := &listJobsOutput{}
-		out.Body.Jobs = jobs
+		out.Body = jobs
 		return out, nil
 	})
 
