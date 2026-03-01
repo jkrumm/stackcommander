@@ -25,9 +25,17 @@ func Open(dataDir string) (*sql.DB, error) {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 
+	// Single connection serializes all writes; SQLite WAL still allows concurrent reads.
+	// PRAGMA busy_timeout is per-connection and not inherited by pool connections,
+	// so limiting to 1 open connection is the correct pattern for write serialization.
+	database.SetMaxOpenConns(1)
+
 	// WAL mode allows concurrent reads (SSE log streaming) alongside writes.
 	if _, err := database.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		return nil, fmt.Errorf("enable WAL: %w", err)
+	}
+	if _, err := database.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		return nil, fmt.Errorf("set busy_timeout: %w", err)
 	}
 
 	if err := migrate(database); err != nil {

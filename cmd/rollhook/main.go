@@ -72,7 +72,7 @@ func main() {
 
 	r := chi.NewRouter()
 
-	config := huma.DefaultConfig("RollHook", "0.1.0")
+	config := huma.DefaultConfig("RollHook API", "0.1.0")
 	config.Info.Description = "Webhook-driven rolling deployment orchestrator for Docker Compose stacks"
 	config.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 		"bearer": {
@@ -87,11 +87,22 @@ func main() {
 
 	// Auth enforcement via huma middleware — operations with Security requirements
 	// are checked; public operations (health, openapi) pass through.
+	// - No Authorization header or non-Bearer format → 401 Unauthorized
+	// - Bearer with wrong token → 403 Forbidden
 	humaAPI.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 		if len(ctx.Operation().Security) > 0 {
-			token, ok := strings.CutPrefix(ctx.Header("Authorization"), "Bearer ")
-			if !ok || token != secret {
+			auth := ctx.Header("Authorization")
+			if auth == "" {
 				_ = huma.WriteErr(humaAPI, ctx, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+			token, ok := strings.CutPrefix(auth, "Bearer ")
+			if !ok {
+				_ = huma.WriteErr(humaAPI, ctx, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+			if token != secret {
+				_ = huma.WriteErr(humaAPI, ctx, http.StatusForbidden, "forbidden")
 				return
 			}
 		}
@@ -105,7 +116,7 @@ func main() {
 	})
 
 	api.RegisterHealth(humaAPI)
-	api.RegisterDeploy(humaAPI, exec)
+	api.RegisterDeploy(humaAPI, exec, store)
 	api.RegisterJobsAPI(humaAPI, store)
 
 	// SSE log stream — registered directly on Chi to bypass huma's response wrapping.

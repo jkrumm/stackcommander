@@ -277,3 +277,58 @@ Implemented all HTTP handlers with full logic (replacing 501 stubs): `POST /depl
 - Smoke test once Zot is in dev PATH: `ROLLHOOK_SECRET=test-secret-7 go run ./cmd/rollhook &` then curl each endpoint.
 - SSE handler could use `fsnotify` for more efficient tail-follow instead of 100ms polling.
 - `newTestServer` rebuilds the full huma+chi stack per test — a shared suite-level fixture would be faster for large test runs.
+
+---
+
+## Group 9: Dockerfile Switch + Delete Bun Server + E2E Green
+
+### What was implemented
+Switched the Dockerfile runner stage from `oven/bun:1.3.9-slim` to `debian:12-slim` and promoted the Go binary to `CMD`. Deleted the entire `apps/server/` Bun/Elysia TypeScript server. Updated E2E setup to build from the root `Dockerfile` instead of `apps/server/Dockerfile`. Ran the full 56-test E2E suite against the Go implementation, triaged all failures, and fixed them. Final result: 56/56 pass.
+
+### Deviations from prompt
+
+**API contract differences (Go is the correct behaviour, tests updated):**
+- `/openapi/json` → `/openapi.json`: Elysia's `@elysiajs/openapi` served at `/openapi/json`; huma serves at `/openapi.json`. Test updated — this was a TS quirk, not a contract.
+- `GET /jobs` bare array: TypeScript returned `[{...}]`; huma had been written to return `{"jobs":[...]}`. Fixed the Go handler to return a bare `[]db.Job` body — matches E2E expectations and dashboard consumption pattern.
+
+**Auth behaviour (Go correct, no test change needed):**
+- No Bearer header → 401. Bearer with wrong token → 403. TypeScript also differentiated these; Go now matches.
+
+**OpenAPI title:** `"RollHook"` → `"RollHook API"` to match the E2E health test assertion.
+
+**Synchronous deploy:** TypeScript's `POST /deploy` blocked until the job reached a terminal state by default; `?async=true` returned immediately. Go's initial implementation always returned `"queued"` immediately. Fixed: default mode polls DB every 200ms (up to 30 min) and returns 200 (success) or 500 (failure). `?async=true` returns immediately.
+
+### Gotchas & surprises
+
+**Zot binary requires glibc (Alpine runner fails):**
+- Zot pre-built binaries are dynamically linked against glibc. Alpine uses musl libc.
+- Symptom: `/bin/sh: /usr/local/bin/zot: not found` even though the file exists (ELF interpreter mismatch — the binary file exists but its dynamic linker path `/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2` is absent on musl systems).
+- Fix: runner switched to `debian:12-slim`. curl installed via `apt-get` for the HEALTHCHECK. The `tool-downloader` stage can remain `alpine:3.21` since it only downloads static binaries.
+
+**huma panics on `out.Status = 0`:**
+- huma passes `out.Status` directly to `http.ResponseWriter.WriteHeader()`. Zero value int (Go default) → `WriteHeader(0)` → panic `invalid WriteHeader code 0`.
+- Fix: always set `out.Status = http.StatusOK` immediately after `out := &DeployOutput{}`, before any early returns.
+
+**SQLite SQLITE_BUSY under concurrent goroutine writes:**
+- `database/sql` connection pool creates multiple connections. `PRAGMA busy_timeout=5000` is a per-connection setting — it only applies to the connection that executed the PRAGMA, not to new connections acquired from the pool.
+- Symptom: queue test fires two concurrent `POST /deploy?async=true`; second INSERT hits a different pool connection without `busy_timeout` set → `SQLITE_BUSY` → 500.
+- Fix: `database.SetMaxOpenConns(1)` — serializes all operations through one connection. With WAL mode, reads (SSE log streaming) and the single writer don't block each other. `busy_timeout` kept as defense-in-depth but `SetMaxOpenConns(1)` is the actual serialization mechanism.
+
+**E2E `deploy.test.ts` updated (11 tests, was 9):**
+- Added `?async=true` flag to tests that didn't need synchronous completion (app name extraction, async-specific test). Default synchronous mode was already tested by the success/failure/version tests.
+- Added explicit assertion for `?async=true` returning `"queued"` immediately.
+
+### Security notes
+- Go binary compiled with `CGO_ENABLED=0 -ldflags="-w -s"`: fully static, no C runtime dependency in the Go binary itself. (Zot and docker CLI still have their own dynamic linking requirements handled by the debian runner.)
+- `ROLLHOOK_SECRET` validated at startup before any listener binds — same guarantee as before.
+- Auth differentiation (401 vs 403) is now explicit: missing/malformed Authorization → 401 `Unauthorized`; Bearer with wrong token → 403 `Forbidden`. No ambiguity about whether a 403 means "wrong token" or "no token".
+
+### Tests updated
+- `internal/api/api_test.go`: `RegisterDeploy` call updated to pass `store`; deploy tests use `?async=true`; list tests decode bare `[]db.Job` array.
+- `e2e/tests/health.test.ts`: `/openapi/json` → `/openapi.json`.
+- `e2e/tests/deploy.test.ts`: two tests switched to `?async=true`; added async-specific test (11 tests, up from 9).
+- `e2e/setup/global.ts`: Dockerfile path `apps/server/Dockerfile` → `Dockerfile`.
+
+### What was deleted
+- `apps/server/` — entire Bun/Elysia TypeScript server (~20 files). No production code retained; all functionality reimplemented in Go.
+- `package.json` scripts: `dev:server`, `test`, `test:coverage` removed (server-specific); `dev` no longer starts `dev:server` in parallel.

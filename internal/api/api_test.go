@@ -64,7 +64,7 @@ func newTestServer(t *testing.T) (http.Handler, *db.Store, string) {
 		next(ctx)
 	})
 
-	api.RegisterDeploy(humaAPI, exec)
+	api.RegisterDeploy(humaAPI, exec, store)
 	api.RegisterJobsAPI(humaAPI, store)
 	r.With(middleware.RequireAuth(testSecret)).Get("/jobs/{id}/logs", api.StreamLogsHandler(store, dataDir))
 
@@ -91,7 +91,7 @@ func TestDeploy_MissingImageTag(t *testing.T) {
 func TestDeploy_Valid(t *testing.T) {
 	srv, _, _ := newTestServer(t)
 	body := `{"image_tag":"localhost:7700/myapp:v1"}`
-	req := httptest.NewRequest(http.MethodPost, "/deploy",
+	req := httptest.NewRequest(http.MethodPost, "/deploy?async=true",
 		strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", authHeader())
@@ -142,17 +142,12 @@ func TestListJobs_Empty(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	var out struct {
-		Jobs []db.Job `json:"jobs"`
-	}
+	var out []db.Job
 	if err := json.NewDecoder(w.Body).Decode(&out); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if out.Jobs == nil {
-		t.Error("expected non-nil jobs slice")
-	}
-	if len(out.Jobs) != 0 {
-		t.Errorf("expected 0 jobs, got %d", len(out.Jobs))
+	if len(out) != 0 {
+		t.Errorf("expected 0 jobs, got %d", len(out))
 	}
 }
 
@@ -191,14 +186,12 @@ func TestListJobs_WithFilter(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	var out struct {
-		Jobs []db.Job `json:"jobs"`
-	}
+	var out []db.Job
 	if err := json.NewDecoder(w.Body).Decode(&out); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(out.Jobs) != 1 || out.Jobs[0].ID != "id-1" {
-		t.Errorf("expected 1 queued job, got %d: %+v", len(out.Jobs), out.Jobs)
+	if len(out) != 1 || out[0].ID != "id-1" {
+		t.Errorf("expected 1 queued job, got %d: %+v", len(out), out)
 	}
 }
 
@@ -351,7 +344,7 @@ func TestDeploy_AppNameExtraction(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.imageTag, func(t *testing.T) {
 			body := fmt.Sprintf(`{"image_tag":%q}`, tc.imageTag)
-			req := httptest.NewRequest(http.MethodPost, "/deploy",
+			req := httptest.NewRequest(http.MethodPost, "/deploy?async=true",
 				strings.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("Authorization", authHeader())

@@ -95,7 +95,7 @@ func PullImage(ctx context.Context, cli *client.Client, imageTag string, logFn f
 
 	reader, err := cli.ImagePull(ctx, imageTag, opts)
 	if err != nil {
-		return fmt.Errorf("docker pull failed: %w", err)
+		return fmt.Errorf("Docker pull failed: %w", err)
 	}
 	defer reader.Close()
 
@@ -154,7 +154,7 @@ func parsePullStream(r io.Reader, logFn func(string)) error {
 			continue // skip malformed NDJSON lines
 		}
 		if event.Error != "" {
-			return fmt.Errorf("docker pull error: %s", event.Error)
+			return fmt.Errorf("Docker pull failed: %s", event.Error)
 		}
 		if event.Status != "" {
 			for _, prefix := range pullLogPrefixes {

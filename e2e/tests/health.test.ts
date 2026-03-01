@@ -21,8 +21,8 @@ describe('/health endpoint', () => {
     expect(res.status).toBe(200)
   })
 
-  it('/openapi/json returns JSON spec with correct title', async () => {
-    const res = await fetch(`${BASE_URL}/openapi/json`)
+  it('/openapi.json returns JSON spec with correct title', async () => {
+    const res = await fetch(`${BASE_URL}/openapi.json`)
     expect(res.status).toBe(200)
     const spec = await res.json() as { info: { title: string } }
     expect(spec.info.title).toBe('RollHook API')
