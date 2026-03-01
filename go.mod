@@ -2,11 +2,13 @@ module github.com/jkrumm/rollhook
 
 go 1.24.1
 
-require github.com/go-chi/chi/v5 v5.2.5
+require (
+	github.com/danielgtaylor/huma/v2 v2.36.0
+	github.com/go-chi/chi/v5 v5.2.5
+)
 
 require (
 	github.com/compose-spec/compose-go/v2 v2.10.1 // indirect
-	github.com/danielgtaylor/huma/v2 v2.36.0 // indirect
 	github.com/docker/docker v28.5.2+incompatible // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/go-containerregistry v0.20.6 // indirect

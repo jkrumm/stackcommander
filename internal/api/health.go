@@ -1,31 +1,43 @@
 package api
 
 import (
-	"encoding/json"
+	"context"
 	"net/http"
 	"os"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/jkrumm/rollhook/internal/state"
 )
 
-type healthResponse struct {
-	Status  string `json:"status"`
-	Version string `json:"version"`
+type healthOutput struct {
+	Status int
+	Body   struct {
+		Status  string `json:"status"`
+		Version string `json:"version"`
+	}
 }
 
-func HealthHandler(w http.ResponseWriter, r *http.Request) {
-	version := os.Getenv("VERSION")
-	if version == "" {
-		version = "dev"
-	}
-
-	resp := healthResponse{Version: version}
-	w.Header().Set("Content-Type", "application/json")
-	if state.IsShuttingDown() {
-		resp.Status = "shutting_down"
-		w.WriteHeader(http.StatusServiceUnavailable)
-	} else {
-		resp.Status = "ok"
-	}
-	json.NewEncoder(w).Encode(resp) //nolint:errcheck
+func RegisterHealth(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "get-health",
+		Method:      http.MethodGet,
+		Path:        "/health",
+		Summary:     "Health check",
+		Tags:        []string{"Health"},
+	}, func(_ context.Context, _ *struct{}) (*healthOutput, error) {
+		version := os.Getenv("VERSION")
+		if version == "" {
+			version = "dev"
+		}
+		out := &healthOutput{}
+		out.Body.Version = version
+		if state.IsShuttingDown() {
+			out.Status = http.StatusServiceUnavailable
+			out.Body.Status = "shutting_down"
+		} else {
+			out.Status = http.StatusOK
+			out.Body.Status = "ok"
+		}
+		return out, nil
+	})
 }
