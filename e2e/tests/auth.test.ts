@@ -69,7 +69,11 @@ describe('authentication', () => {
       headers: webhookHeaders(),
       body: JSON.stringify({ image_tag: NONEXISTENT_IMAGE }),
     })
-    const { job_id } = await deployRes.json() as { job_id: string }
+    expect(deployRes.status).toBe(200)
+    const body = await deployRes.json() as { job_id: string }
+    expect(typeof body.job_id).toBe('string')
+    expect(body.job_id.length).toBeGreaterThan(0)
+    const { job_id } = body
 
     const res = await fetch(`${BASE_URL}/jobs/${job_id}`, {
       headers: { Authorization: `Bearer ${WEBHOOK_TOKEN}` },

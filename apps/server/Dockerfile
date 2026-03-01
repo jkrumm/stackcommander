@@ -1,11 +1,15 @@
 # Download Docker CLI static binary + docker-rollout in a throw-away stage.
 # Static binaries work on any Linux regardless of libc version.
 FROM alpine:3.21 AS tool-downloader
+ARG DOCKER_TGZ_SHA256=4f798b3ee1e0140eab5bf30b0edc4e84f4cdb53255a429dc3bbae9524845d640
+ARG DOCKER_COMPOSE_SHA256=dba9d98e1ba5bfe11d88c99b9bd32fc4a0624a30fafe68eea34d61a3e42fd372
 RUN apk add --no-cache curl \
-  && curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-27.5.1.tgz" \
-     | tar xz --strip-components=1 -C /usr/local/bin docker/docker \
+  && curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-27.5.1.tgz" -o /tmp/docker.tgz \
+  && echo "${DOCKER_TGZ_SHA256}  /tmp/docker.tgz" | sha256sum -c - \
+  && tar xz --strip-components=1 -C /usr/local/bin -f /tmp/docker.tgz docker/docker \
   && curl -fsSL "https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-x86_64" \
      -o /usr/local/bin/docker-compose-plugin \
+  && echo "${DOCKER_COMPOSE_SHA256}  /usr/local/bin/docker-compose-plugin" | sha256sum -c - \
   && chmod +x /usr/local/bin/docker-compose-plugin
 
 FROM oven/bun:1.3.9-slim AS runner

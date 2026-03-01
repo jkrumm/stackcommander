@@ -41,9 +41,9 @@ describe('setEnvLine', () => {
     expect(setEnvLine('IMAGE_TAG=\n', 'IMAGE_TAG', 'v2')).toBe('IMAGE_TAG=v2\n')
   })
 
-  it('replaces only the first occurrence when duplicate keys exist', () => {
+  it('replaces the last occurrence when duplicate keys exist', () => {
     const content = 'IMAGE_TAG=v1\nIMAGE_TAG=also-old\n'
-    expect(setEnvLine(content, 'IMAGE_TAG', 'v2')).toBe('IMAGE_TAG=v2\nIMAGE_TAG=also-old\n')
+    expect(setEnvLine(content, 'IMAGE_TAG', 'v2')).toBe('IMAGE_TAG=v1\nIMAGE_TAG=v2\n')
   })
 
   it('appends a new key alongside unrelated content', () => {

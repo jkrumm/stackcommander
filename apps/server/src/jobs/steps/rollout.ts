@@ -99,7 +99,14 @@ export async function rolloutApp(
           throw new Error(`Rolling deploy timed out: container ${container.Id.slice(0, 12)} did not become healthy within ${HEALTH_TIMEOUT_MS / 1000}s`)
         }
 
-        const detail = await inspectContainer(container.Id)
+        let detail
+        try {
+          detail = await inspectContainer(container.Id)
+        }
+        catch (inspectErr) {
+          await rollback(newContainers.map(c => c.Id), 'container inspection failed', log)
+          throw inspectErr
+        }
         const health = detail.State.Health
 
         if (health === null)
@@ -135,7 +142,9 @@ export async function rolloutApp(
     try {
       rmSync(tmpEnvFile)
     }
-    catch {}
+    catch (e) {
+      log(`[rollout] Warning: failed to remove temp env file ${tmpEnvFile}: ${e instanceof Error ? e.message : String(e)}`)
+    }
   }
 }
 

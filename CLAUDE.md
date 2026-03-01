@@ -32,7 +32,7 @@ rollhook/
           steps/discover.ts        # docker ps + docker inspect to find compose_path + service
           steps/pull.ts            # docker pull <image>
           steps/validate.ts        # Pre-deploy: check compose_path is absolute + exists
-          steps/rollout.ts         # docker rollout (single service, healthcheck-gated, IMAGE_TAG via env)
+          steps/rollout.ts         # TypeScript rolling deploy (scale-up → health poll → drain old)
           notifier.ts              # Pushover + configurable webhook (NOTIFICATION_WEBHOOK_URL env var)
           queue.ts                 # In-memory job queue (Bun-native)
         db/
@@ -62,17 +62,17 @@ rollhook/
 
 ## Tech Stack
 
-| Layer              | Choice                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------ |
-| Runtime            | Bun 1.3.9                                                                            |
-| Monorepo           | Bun workspaces (native)                                                              |
-| Language           | TypeScript 6.0.0-beta                                                                |
-| Backend            | Elysia (Bun-native, OpenAPI, bearer auth plugin)                                     |
-| API Docs           | Scalar via `@elysiajs/openapi` at `/openapi`                                         |
-| Database           | `bun:sqlite` — `data/rollhook.db`, job metadata                                      |
-| Discovery          | `docker ps` + `docker inspect` — reads Docker Compose labels from running containers |
-| Deployment         | `docker-rollout` — zero-downtime rolling updates                                     |
-| Linting/Formatting | @antfu/eslint-config (ESLint flat config, no Prettier)                               |
+| Layer              | Choice                                                                           |
+| ------------------ | -------------------------------------------------------------------------------- |
+| Runtime            | Bun 1.3.9                                                                        |
+| Monorepo           | Bun workspaces (native)                                                          |
+| Language           | TypeScript 6.0.0-beta                                                            |
+| Backend            | Elysia (Bun-native, OpenAPI, bearer auth plugin)                                 |
+| API Docs           | Scalar via `@elysiajs/openapi` at `/openapi`                                     |
+| Database           | `bun:sqlite` — `data/rollhook.db`, job metadata                                  |
+| Discovery          | Docker REST API — reads compose labels from running containers                   |
+| Deployment         | TypeScript rolling deploy via Docker REST API — healthcheck-gated, zero-downtime |
+| Linting/Formatting | @antfu/eslint-config (ESLint flat config, no Prettier)                           |
 
 ---
 
@@ -142,7 +142,7 @@ bun run lint:fix    # Fix + format
 | `apps/server/src/api/jobs.ts`            | `GET /jobs/:id`, `GET /jobs/:id/logs` (SSE), `GET /jobs`   |
 | `apps/server/src/middleware/auth.ts`     | Bearer token plugin — two roles: `admin`, `webhook`        |
 | `apps/server/src/db/client.ts`           | `bun:sqlite` instance, auto-migrations                     |
-| `apps/server/src/jobs/steps/discover.ts` | `docker ps` + `docker inspect` — find compose_path/service |
+| `apps/server/src/jobs/steps/discover.ts` | Docker REST API — find compose_path/service from labels    |
 
 OpenAPI (Scalar UI): `@elysiajs/openapi` — served at `/openapi`, JSON spec at `/openapi/json`.
 
@@ -200,9 +200,10 @@ export type { JobResult, JobStatus }
 ## API Surface
 
 ```
-POST   /deploy/:app                # roles: admin, webhook
+POST   /deploy                     # roles: admin, webhook
   Body: { image_tag: string }
   Returns: { job_id, app, status: "queued" }
+  app is derived from image_tag: image.split('/').pop().split(':')[0]
   Discovers compose_path + service from running container matching image_tag
 
 GET    /jobs/:id                   # roles: admin, webhook

@@ -7,7 +7,7 @@ export function setEnvLine(content: string, key: string, value: string): string 
   const keyPrefix = `${key}=`
   const newLine = `${key}=${value}`
   const lines = content.split('\n')
-  const idx = lines.findIndex(l => l.startsWith(keyPrefix))
+  const idx = lines.findLastIndex(l => l.startsWith(keyPrefix))
   if (idx >= 0) {
     lines[idx] = newLine
     return lines.join('\n')

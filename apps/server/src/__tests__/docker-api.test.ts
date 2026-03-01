@@ -73,13 +73,16 @@ function makeNdjsonStream(events: object[]): Response {
   return new Response(stream, { status: 200 })
 }
 
+let fetchSpy: ReturnType<typeof spyOn> | undefined
+
 describe('pullImageStream', () => {
   afterEach(() => {
-    // Ensure no spy leaks between tests
+    fetchSpy?.mockRestore()
+    fetchSpy = undefined
   })
 
   it('logs only high-level pull events, filters per-layer noise', async () => {
-    const spy = spyOn(globalThis, 'fetch').mockResolvedValue(makeNdjsonStream([
+    fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(makeNdjsonStream([
       { status: 'Pulling from registry/myapp', id: 'latest' },
       { status: 'Pulling fs layer', id: 'abc' },
       { status: 'Waiting', id: 'abc' },
@@ -104,32 +107,29 @@ describe('pullImageStream', () => {
     expect(logs).not.toContain('Download complete')
     expect(logs).not.toContain('Extracting')
     expect(logs.some(l => l.includes('[=>'))).toBe(false)
-    spy.mockRestore()
   })
 
   it('throws on Docker pull error event in stream', async () => {
-    const spy = spyOn(globalThis, 'fetch').mockResolvedValue(makeNdjsonStream([
+    fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(makeNdjsonStream([
       { status: 'Pulling from registry/myapp' },
       { error: 'manifest for registry/myapp:notexist not found' },
     ]))
     await expect(
       pullImageStream('registry.example.com/myapp:notexist', () => {}),
     ).rejects.toThrow('Docker pull error: manifest for registry/myapp:notexist not found')
-    spy.mockRestore()
   })
 
   it('throws when Docker API returns non-2xx', async () => {
-    const spy = spyOn(globalThis, 'fetch').mockResolvedValue(
+    fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('{"message":"image not found"}', { status: 404 }),
     )
     await expect(
       pullImageStream('registry.example.com/myapp:notexist', () => {}),
     ).rejects.toThrow('Docker pull failed (404)')
-    spy.mockRestore()
   })
 
   it('handles already-up-to-date image', async () => {
-    const spy = spyOn(globalThis, 'fetch').mockResolvedValue(makeNdjsonStream([
+    fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(makeNdjsonStream([
       { status: 'Already exists', id: 'layer1' },
       { status: 'Already exists', id: 'layer2' },
       { status: 'Digest: sha256:abc123' },
@@ -139,14 +139,13 @@ describe('pullImageStream', () => {
     await pullImageStream('registry.example.com/myapp:v1', line => logs.push(line))
     expect(logs).toContain('Already exists')
     expect(logs).toContain('Status: Image is up to date for registry/myapp:v1')
-    spy.mockRestore()
   })
 
   it('handles digest-only image tag — passes full reference as fromImage', async () => {
     const digest = `registry.example.com/myapp@sha256:${'a'.repeat(64)}`
     let capturedUrl = ''
 
-    const spy = spyOn(globalThis, 'fetch').mockImplementation(((url: string | URL | Request) => {
+    fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(((url: string | URL | Request) => {
       capturedUrl = String(url)
       return Promise.resolve(makeNdjsonStream([
         { status: 'Status: Image is up to date' },
@@ -159,7 +158,6 @@ describe('pullImageStream', () => {
     expect(capturedUrl).toContain('sha256')
     expect(capturedUrl).not.toContain('tag=')
     expect(logs).toContain('Status: Image is up to date')
-    spy.mockRestore()
   })
 
   it('skips malformed NDJSON lines without throwing', async () => {
@@ -176,20 +174,18 @@ describe('pullImageStream', () => {
         c.close()
       },
     })
-    const spy = spyOn(globalThis, 'fetch').mockResolvedValue(new Response(stream, { status: 200 }))
+    fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(new Response(stream, { status: 200 }))
     const logs: string[] = []
     await expect(
       pullImageStream('registry.example.com/myapp:v1', line => logs.push(line)),
     ).resolves.toBeUndefined()
     expect(logs).toContain('Pulling from registry/myapp')
-    spy.mockRestore()
   })
 
   it('handles empty response body gracefully', async () => {
-    const spy = spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }))
+    fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }))
     await expect(
       pullImageStream('registry.example.com/myapp:v1', () => {}),
     ).resolves.toBeUndefined()
-    spy.mockRestore()
   })
 })

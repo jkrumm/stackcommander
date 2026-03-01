@@ -58,7 +58,10 @@ export async function pullImageStream(imageTag: string, logFn: (line: string) =>
   }
 
   const params = new URLSearchParams(tag !== undefined ? { fromImage, tag } : { fromImage })
-  const res = await dockerFetch(`/images/create?${params}`, { method: 'POST' })
+  const res = await dockerFetch(`/images/create?${params}`, {
+    method: 'POST',
+    signal: AbortSignal.timeout(10 * 60 * 1000), // 10 min — pulls can be slow for large images
+  })
   if (!res.ok) {
     const body = await res.text()
     throw new Error(`Docker pull failed (${res.status}): ${body}`)

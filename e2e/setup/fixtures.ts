@@ -1,18 +1,20 @@
 import type { JobResult } from 'rollhook'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 
 export const BASE_URL = 'http://localhost:7700'
 export const TRAEFIK_URL = 'http://localhost:9080'
 export const REGISTRY_HOST = 'localhost:5001'
 // App name as derived by the server from image tag: image.split('/').pop().split(':')[0]
 export const APP_NAME = 'rollhook-e2e-hello'
+// Docker Compose names containers as <project>-<service>-<index>, e.g. bun-hello-world-hello-world-1.
+export const CONTAINER_NAME_FILTER = 'bun-hello-world-hello-world'
 
 // Count running containers whose name starts with the given prefix.
-// Docker Compose names containers as <project>-<service>-<index>, e.g. bun-hello-world-hello-world-1.
-export function getContainerCount(nameFilter = 'bun-hello-world-hello-world'): number {
+export function getContainerCount(nameFilter: string = CONTAINER_NAME_FILTER): number {
   try {
-    const output = execSync(
-      `docker ps --filter name=${nameFilter} --format "{{.Names}}"`,
+    const output = execFileSync(
+      'docker',
+      ['ps', '--filter', `name=${nameFilter}`, '--format', '{{.Names}}'],
       { encoding: 'utf-8' },
     ).trim()
     return output ? output.split('\n').filter(Boolean).length : 0
