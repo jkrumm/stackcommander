@@ -45,3 +45,6 @@ examples/bun-hello-world/.env
 # RALPH loop state (machine-specific, resumable but not committed)
 .ralph-tasks.json
 .ralph-logs/
+.ralph-go-tasks.json
+.ralph-go-logs/
+docs/go-rewrite/RALPH_REPORT.md
