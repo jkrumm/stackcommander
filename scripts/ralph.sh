@@ -220,13 +220,19 @@ run_group() {
   echo ""
 
   local exit_code=0
-  if gtimeout "$CLAUDE_TIMEOUT" claude \
+  # < /dev/null: prevents claude from blocking on stdin (interactive prompts/dialogs)
+  # CLAUDE_CODE_ENABLE_TASKS=true: enable task tracking in non-interactive mode
+  # --output-format stream-json: ensures output is streamed to stdout in realtime
+  # --no-session-persistence: avoid session file conflicts between groups
+  if CLAUDE_CODE_ENABLE_TASKS=true gtimeout "$CLAUDE_TIMEOUT" claude \
     -p "$full_prompt" \
     --dangerously-skip-permissions \
-    2>&1 | tee "$log_file"; then
+    --output-format stream-json \
+    --no-session-persistence \
+    < /dev/null 2>&1 | tee "$log_file"; then
     exit_code=${PIPESTATUS[0]}
   else
-    exit_code=$?
+    exit_code=${PIPESTATUS[0]}
   fi
 
   # Check for timeout
@@ -235,6 +241,7 @@ run_group() {
     return 1
   fi
 
+  # Signals are plain text embedded in stream-json — grep works on raw bytes
   # Check for completion signal
   if grep -q "RALPH_TASK_COMPLETE: Group $group_id" "$log_file"; then
     return 0
