@@ -64,3 +64,39 @@ Bearer token auth middleware, huma v2 + Chi wiring with OpenAPI 3.1 spec at `/op
 ### Future improvements
 - The `/jobs/{id}/logs` SSE endpoint is a stub returning 501 via huma. In a later group, this will likely bypass huma and be a raw chi handler (huma has no native SSE support); the huma registration may be replaced with a chi-level SSE handler that also contributes to the spec via manual spec patching or a custom huma response type.
 - `go mod tidy` should be run to clean up `// indirect` markers after all direct imports are finalized.
+
+---
+
+## Group 3: SQLite + Job Persistence
+
+### What was implemented
+`internal/db/client.go`: opens `data/rollhook.db` via modernc.org/sqlite, enables WAL mode, runs idempotent migrations using `PRAGMA table_info`. `internal/db/jobs.go`: `Job` struct, `JobStatus` constants, `Store` CRUD methods (Insert, Get, List, UpdateStatus, UpdateDiscovery), log file helpers (LogPath, AppendLog, EnsureLogDir). `internal/db/jobs_test.go`: 14 tests across 7 test functions covering all CRUD paths and log helpers.
+
+### Deviations from prompt
+- **`Store` struct instead of package-level functions**: the prompt sketched package-level functions (`Insert(job Job) error`), but a `Store` struct with a `*sql.DB` field is more idiomatic Go and makes dependency injection into handlers straightforward. No global state.
+- **`sql.NullString` for nullable fields**: Go's `database/sql` requires explicit null handling; scanning nullable TEXT columns into `sql.NullString` then converting to `*string` is the correct pattern. The `*string` JSON tags in the `Job` struct match the TypeScript `JobResult` optional fields.
+
+### Gotchas & surprises
+- `modernc.org/sqlite` registers itself under the driver name `"sqlite"` (not `"sqlite3"` — that's `mattn/go-sqlite3`). Using the wrong name gives a `sql: unknown driver "sqlite3"` panic.
+- WAL mode cannot be applied to an in-memory SQLite database (the journal is in-memory by definition). Tests bypass `Open()` and call `migrate()` directly after `sql.Open("sqlite", ":memory:")` — this skips the WAL pragma entirely, which is correct for unit tests.
+- `PRAGMA table_info(jobs)` returns 6 columns per row: `cid`, `name`, `type`, `notnull`, `dflt_value`, `pk`. All 6 must be scanned; attempting to scan fewer columns yields a `sql: expected N destination arguments in Scan, not M` error.
+- `time.RFC3339` round-trips correctly through SQLite TEXT. SQLite's `CURRENT_TIMESTAMP` default uses `"YYYY-MM-DD HH:MM:SS"` format, so `parseTime` handles multiple layouts to be robust against rows inserted by the TS server or SQLite defaults.
+
+### Security notes
+- Log files are created with mode `0o644` (owner read/write, group/other read) — appropriate for a single-user VPS. Log directory uses `0o755`.
+- No SQL injection risk: all query parameters use `?` placeholders via `database/sql`.
+
+### Tests added
+- `internal/db/jobs_test.go`:
+  - `TestInsertAndGet` — round-trip for all fields including nil optionals
+  - `TestGetMissingReturnsNil` — confirms nil return (not error) for unknown ID
+  - `TestUpdateStatusTransitions` — table-driven: queued→running→success and queued→running→failed with error message
+  - `TestUpdateDiscovery` — compose_path + service set correctly
+  - `TestListFilters` — subtests for no filter, app filter, status filter, combined filter, limit
+  - `TestListOrderedNewestFirst` — newest job appears first
+  - `TestLogHelpers` — EnsureLogDir, LogPath, AppendLog (content verification)
+
+### Future improvements
+- `Store` could be extended with a `DB() *sql.DB` accessor for raw queries in tests or migrations.
+- Consider using `time.Now().UTC().Round(time.Second)` in Insert to avoid sub-second precision that varies between systems.
+- A `Ping()` wrapper in `Open()` would catch open-but-unusable databases (e.g., permission errors that don't surface until first query).
