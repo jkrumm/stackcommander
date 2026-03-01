@@ -13,16 +13,10 @@ services:
     networks:
       - traefik
 
-  registry:
-    image: registry:2
-    ports:
-      - '5001:5000'
-    networks:
-      - traefik
-
   # RollHook runs as a container — mirrors real production deployment.
   # PROJECT_ROOT is set by global.ts to the monorepo root so that compose file paths
   # discovered from Docker labels (absolute host paths) are accessible inside this container.
+  # The embedded Zot registry runs inside this container and is proxied at /v2/*.
   rollhook:
     image: rollhook-e2e-server:latest
     pull_policy: never
@@ -37,7 +31,6 @@ services:
         target: ${PROJECT_ROOT}
     depends_on:
       - traefik
-      - registry
     networks:
       - traefik
 

@@ -33,11 +33,16 @@ export async function setup(): Promise<void> {
     { stdio: 'inherit' },
   )
 
-  // Start infrastructure (Traefik + local registry) and RollHook container
+  // Start infrastructure (Traefik) and RollHook container (with embedded Zot registry)
   composeE2E('up -d')
 
-  // Wait for registry to be ready
-  await waitForUrl('http://localhost:5001/v2/', 30_000)
+  // Wait for RollHook to be ready (Zot starts inside before app.listen(), so registry is also ready)
+  await waitForUrl('http://localhost:7700/health', 30_000)
+
+  // Authenticate with the embedded registry via the OCI proxy
+  execSync(`docker login ${REGISTRY_HOST} --username rollhook --password ${ROLLHOOK_SECRET}`, {
+    stdio: 'inherit',
+  })
 
   // Build images
   execSync(
@@ -49,20 +54,22 @@ export async function setup(): Promise<void> {
     { stdio: 'inherit' },
   )
 
-  // Push images to local registry so executor's docker pull step succeeds
+  // Remove stale registry-tagged images so Docker daemon re-checks layer existence
+  // instead of skipping uploads based on a previous (now-gone) registry session.
+  execSync(`docker rmi ${REGISTRY_HOST}/rollhook-e2e-hello:v1 2>/dev/null || true`)
+  execSync(`docker rmi ${REGISTRY_HOST}/rollhook-e2e-hello:v2 2>/dev/null || true`)
+
+  // Push images to RollHook's embedded registry so executor's docker pull step succeeds
   execSync(`docker tag rollhook-e2e-hello:v1 ${REGISTRY_HOST}/rollhook-e2e-hello:v1`)
   execSync(`docker push ${REGISTRY_HOST}/rollhook-e2e-hello:v1`, { stdio: 'inherit' })
   execSync(`docker tag rollhook-e2e-hello:v2 ${REGISTRY_HOST}/rollhook-e2e-hello:v2`)
   execSync(`docker push ${REGISTRY_HOST}/rollhook-e2e-hello:v2`, { stdio: 'inherit' })
 
   // Start hello-world app at v1
-  // compose.yml default `${IMAGE_TAG:-localhost:5001/rollhook-e2e-hello:v1}` handles initial startup
+  // compose.yml default `${IMAGE_TAG:-localhost:7700/rollhook-e2e-hello:v1}` handles initial startup
   execSync(`docker compose --project-directory ${HELLO_WORLD_DIR} up -d`, {
     stdio: 'inherit',
   })
-
-  // Wait for RollHook to be ready
-  await waitForUrl('http://localhost:7700/health', 30_000)
 
   // Wait for hello-world to be routable through Traefik before starting any tests.
   // Traefik discovers container labels within ~100ms but needs its healthcheck to pass
