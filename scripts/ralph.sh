@@ -222,10 +222,14 @@ run_group() {
   local exit_code=0
   # < /dev/null: prevents claude from blocking on stdin (interactive prompts/dialogs)
   # CLAUDE_CODE_ENABLE_TASKS=true: enable task tracking in non-interactive mode
+  # --output-format stream-json --verbose: force realtime stdout flushing
+  #   (default text format buffers the entire response; log stays empty until done)
   # --no-session-persistence: avoid session file conflicts between groups
   if CLAUDE_CODE_ENABLE_TASKS=true gtimeout "$CLAUDE_TIMEOUT" claude \
     -p "$full_prompt" \
     --dangerously-skip-permissions \
+    --output-format stream-json \
+    --verbose \
     --no-session-persistence \
     < /dev/null 2>&1 | tee "$log_file"; then
     exit_code=${PIPESTATUS[0]}
