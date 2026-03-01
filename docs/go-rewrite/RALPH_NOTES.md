@@ -205,3 +205,38 @@ FIFO channel-based job queue (`internal/jobs/queue.go`), service discovery via D
 ### Future improvements
 - Integration test for `Discover` (requires a labelled Docker container) — skipped for now; covered by E2E tests instead.
 - The executor's `execute` method passes `context.Background()` — once pull/rollout are added in Group 7, a cancellable context should be threaded from the queue worker so a SIGTERM can interrupt in-flight pulls.
+
+---
+
+## Group 7: Pull Step + Rolling Deploy + Notifier
+
+### What was implemented
+`internal/jobs/steps/pull.go`: thin wrapper around `docker.PullImage` with consistent `[pull]` log prefixes. `internal/jobs/steps/rollout.go`: full zero-downtime rolling deploy — scale-up via `docker compose` subprocess, per-container health polling with individual deadlines, rollback on failure, old container drain. `internal/notifier/notifier.go`: Pushover and webhook notifications, non-fatal on error. `internal/jobs/executor.go` updated: pull + rollout + notify wired into the full deploy pipeline.
+
+### Deviations from prompt
+- **`rollbackContainers` uses `context.Background()`**: rollback is cleanup after failure, so it must complete even if the parent context is cancelled (e.g. timeout). Using the parent ctx would abort cleanup if the context that triggered the rollback was already done.
+- **`exec.CommandContext(ctx, ...)` for docker compose**: unlike the Zot manager (which needs graceful SIGTERM handling), the compose subprocess being killed mid-scale just means old containers remain running — a safe state. Using `exec.CommandContext` lets a future cancellable context interrupt a hung scale-up.
+- **No separate `pull_test.go`**: `PullImage` auth injection is already fully covered in `internal/docker/api_test.go` (`TestIsLocalhost`, `TestBuildRegistryAuth`). The `Pull` wrapper itself has no logic beyond delegation, so a separate test file would only duplicate those tests. Integration coverage is provided by E2E tests.
+
+### .env Problem Decision
+**Chosen approach: read+merge** (same as TypeScript). Docker Compose v2 `--env-file` fully replaces the auto-loaded `.env` — it does not merge. Passing a temp file with only `IMAGE_TAG=<tag>` would silently drop all other user variables. The correct solution is: read user's `.env`, merge `IMAGE_TAG` into it via `setEnvLine`, write temp file. The temp file is cleaned up in a deferred `os.Remove`. The user's `.env` is never touched. `setEnvLine` replaces the last occurrence of the key (matching TypeScript's `findLastIndex` behaviour) to handle the edge case of duplicate keys.
+
+### Gotchas & surprises
+- **`os.IsNotExist` vs `errors.Is(err, fs.ErrNotExist)`**: both work in Go 1.24; `os.IsNotExist` is the traditional form and still idiomatic for filesystem operations.
+- **`container.Summary.ID` field**: confirmed uppercase `ID` (not `Id`) — Docker SDK v28 naming. Consistent with `api.go` usage.
+- **`go vet` clean on package-level vars in notifier**: `httpClient` and `pushoverEndpoint` package-level vars draw a `gochecknoglobals` lint comment if golangci-lint is configured; suppressed with `//nolint:gochecknoglobals`. This is the canonical Go pattern for injecting test doubles into functions with a fixed signature.
+- **`httptest.NewServer` for notifier tests**: no mock framework needed. Standard library `httptest.NewServer` captures real HTTP requests, allowing inspection of body, headers, and method without any mocking infrastructure.
+
+### Security notes
+- Notification config is read from env at job execution time (not stored in the Executor struct) — avoids persisting sensitive values in heap-allocated structs for the lifetime of the server.
+- `pushoverEndpoint` override is only accessible from `package notifier` — the package-level var is unexported, so tests must live in the same package. This prevents callers from accidentally overriding the endpoint in production code.
+
+### Tests added
+- `internal/jobs/steps/rollout_test.go`: `TestScaleTarget` (4 cases), `TestSetEnvLine` (6 table cases), `TestEnvInt_Default`, `TestEnvInt_Set`
+- `internal/notifier/notifier_test.go`: `TestNotifier_Webhook`, `TestNotifier_Pushover`, `TestNotifier_Pushover_FailureTitle`, `TestNotifier_NotCalledWhenUnconfigured`, `TestNotifier_WebhookError_DoesNotPanic`
+- Full suite: all packages pass. Previous 50 tests + 13 new = 63 tests.
+
+### Future improvements
+- Thread a cancellable context from the queue worker into `execute()` so SIGTERM can interrupt in-flight pulls/rollouts.
+- `TestRollout_FirstDeploy` / `TestRollout_NormalDeploy` as integration tests (require Docker + docker compose in PATH) — scale count behaviour is currently covered by `TestScaleTarget` unit test.
+- Notifier config could be passed as a constructor arg to `Executor` (injected at startup) rather than read from env at each job execution — would enable cleaner testing of the executor's notification path.
