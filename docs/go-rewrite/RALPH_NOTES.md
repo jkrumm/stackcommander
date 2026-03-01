@@ -174,3 +174,34 @@ Bearer token auth middleware, huma v2 + Chi wiring with OpenAPI 3.1 spec at `/op
 - Manager integration test (requires Zot binary in PATH): start manager, hit `/v2/`, verify 401, stop manager. Currently only unit tests.
 - `DataDir` could be exposed as a field or method on `Manager` so callers don't need to track it separately.
 - Consider a `Manager.Addr()` method returning `"http://127.0.0.1:5000"` so `main.go` doesn't hardcode the port.
+
+---
+
+## Group 6: Job Queue, Service Discovery, and Compose Validation
+
+### What was implemented
+FIFO channel-based job queue (`internal/jobs/queue.go`), service discovery via Docker label inspection (`internal/jobs/steps/discover.go`), compose file validation using compose-go v2 (`internal/jobs/steps/validate.go`), and the executor skeleton that ties them together (`internal/jobs/executor.go`).
+
+### Deviations from prompt
+- Exported `FindMatchingContainer` and `ExtractComposeInfo` (alongside the already-exported `ExtractImageName`) to enable clean black-box tests from `package steps_test` — mirrors the TypeScript source which explicitly exports these helpers "for unit testing".
+- Added `NewJob()` helper on the executor package to create a `db.Job` with a UUID and timestamps — keeps job creation logic in one place rather than scattered across API handlers.
+- Added `TestQueue_DrainNoopsAfterFirst` and `TestQueue_EnqueueAfterDrainIsNoOp` beyond the three tests in the prompt, covering idempotency and panic-safety of the Drain + Enqueue interaction.
+
+### Gotchas & surprises
+- `cli.WithSkipValidation` does not exist in the `cli` package. The option lives on `loader.Options.SkipValidation` and must be threaded in via `cli.WithLoadOptions(func(o *loader.Options) { o.SkipValidation = true })`.
+- compose-go v2 (v2.10.1) brought in several transitive dependencies (`go.yaml.in/yaml`, `santhosh-tekuri/jsonschema`, `go-viper/mapstructure`, etc.) — worth noting for image size budgets.
+- `go mod tidy` was required after `go get github.com/compose-spec/compose-go/v2` before `go build` would succeed (indirect deps needed updating in `go.sum`).
+
+### Security notes
+- No sensitive data flows through the queue or executor beyond the `ROLLHOOK_SECRET` held by the Executor for registry auth (used in Group 7's pull step).
+- `cli.WithOsEnv` in validate loads the process's full OS environment into compose interpolation. This is correct (matches how `docker compose` behaves) but means any secret env vars could be interpolated into compose file variables if there's a naming collision. This is a pre-existing Docker Compose behaviour, not introduced here.
+
+### Tests added
+- `internal/jobs/queue_test.go`: `TestQueue_FIFO`, `TestQueue_Sequential`, `TestQueue_Drain`, `TestQueue_DrainNoopsAfterFirst`, `TestQueue_EnqueueAfterDrainIsNoOp`
+- `internal/jobs/steps/discover_test.go`: `TestExtractImageName` (7 cases), `TestFindMatchingContainer` (5 cases), `TestExtractComposeInfo_Success`, `TestExtractComposeInfo_NilLabels`, `TestExtractComposeInfo_MissingConfigFiles`, `TestExtractComposeInfo_MissingService`
+- `internal/jobs/steps/validate_test.go`: `TestValidate_RelativePath`, `TestValidate_MissingFile`, `TestValidate_ServiceNotFound`, `TestValidate_Success`, `TestValidate_BuildOnlyService`, `TestValidate_ImageMismatch`
+- Total new tests: 18. Full suite: 50/50 pass.
+
+### Future improvements
+- Integration test for `Discover` (requires a labelled Docker container) — skipped for now; covered by E2E tests instead.
+- The executor's `execute` method passes `context.Background()` — once pull/rollout are added in Group 7, a cancellable context should be threaded from the queue worker so a SIGTERM can interrupt in-flight pulls.
