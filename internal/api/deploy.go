@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	jobspkg "github.com/jkrumm/rollhook/internal/jobs"
 )
 
 type DeployInput struct {
@@ -21,7 +22,7 @@ type DeployOutput struct {
 	}
 }
 
-func RegisterDeploy(humaAPI huma.API) {
+func RegisterDeploy(humaAPI huma.API, exec *jobspkg.Executor) {
 	huma.Register(humaAPI, huma.Operation{
 		OperationID: "post-deploy",
 		Method:      http.MethodPost,
@@ -29,7 +30,18 @@ func RegisterDeploy(humaAPI huma.API) {
 		Summary:     "Trigger a rolling deployment",
 		Tags:        []string{"Deploy"},
 		Security:    []map[string][]string{{"bearer": {}}},
-	}, func(_ context.Context, _ *DeployInput) (*DeployOutput, error) {
-		return nil, huma.NewError(http.StatusNotImplemented, "not yet implemented")
+	}, func(_ context.Context, input *DeployInput) (*DeployOutput, error) {
+		if input.Body.ImageTag == "" {
+			return nil, huma.NewError(http.StatusBadRequest, "image_tag is required")
+		}
+		job := jobspkg.NewJob(input.Body.ImageTag)
+		if err := exec.Submit(job); err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, err.Error())
+		}
+		out := &DeployOutput{}
+		out.Body.JobID = job.ID
+		out.Body.App = job.App
+		out.Body.Status = string(job.Status)
+		return out, nil
 	})
 }

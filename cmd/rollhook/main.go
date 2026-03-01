@@ -16,7 +16,12 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	"github.com/jkrumm/rollhook/internal/api"
+	"github.com/jkrumm/rollhook/internal/db"
+	dockerpkg "github.com/jkrumm/rollhook/internal/docker"
+	"github.com/jkrumm/rollhook/internal/jobs"
+	"github.com/jkrumm/rollhook/internal/middleware"
 	"github.com/jkrumm/rollhook/internal/registry"
+	"github.com/jkrumm/rollhook/internal/state"
 )
 
 const scalarHTML = `<!doctype html>
@@ -48,6 +53,23 @@ func main() {
 		log.Fatalf("failed to start registry: %v", err)
 	}
 
+	// Database
+	sqlDB, err := db.Open(dataDir)
+	if err != nil {
+		log.Fatalf("failed to open database: %v", err)
+	}
+	store := db.NewStore(sqlDB)
+
+	// Docker client
+	cli, err := dockerpkg.NewClient()
+	if err != nil {
+		log.Fatalf("failed to create docker client: %v", err)
+	}
+	defer cli.Close()
+
+	// Job executor (creates and starts the internal queue)
+	exec := jobs.NewExecutor(store, cli, secret, dataDir)
+
 	r := chi.NewRouter()
 
 	config := huma.DefaultConfig("RollHook", "0.1.0")
@@ -59,7 +81,6 @@ func main() {
 		},
 	}
 	// Disable huma's built-in docs UI — we serve Scalar at /openapi ourselves.
-	// SpecPath="/openapi" (default) exposes /openapi.json and /openapi.yaml.
 	config.DocsPath = ""
 
 	humaAPI := humachi.New(r, config)
@@ -84,11 +105,13 @@ func main() {
 	})
 
 	api.RegisterHealth(humaAPI)
-	api.RegisterDeploy(humaAPI)
-	api.RegisterJobs(humaAPI)
+	api.RegisterDeploy(humaAPI, exec)
+	api.RegisterJobsAPI(humaAPI, store)
+
+	// SSE log stream — registered directly on Chi to bypass huma's response wrapping.
+	r.With(middleware.RequireAuth(secret)).Get("/jobs/{id}/logs", api.StreamLogsHandler(store, dataDir))
 
 	// OCI distribution routes — proxied to internal Zot (127.0.0.1:5000).
-	// Chi wildcard handles all nested paths correctly (unlike Elysia 1.4 .all()).
 	proxyHandler := registry.NewProxy("http://127.0.0.1:5000", secret)
 	r.Handle("/v2", proxyHandler)
 	r.Handle("/v2/", proxyHandler)
@@ -106,10 +129,17 @@ func main() {
 
 	go func() {
 		<-ctx.Done()
+		// Signal /health to return 503 so Traefik stops routing traffic here.
+		state.StartShutdown()
+		// Allow Traefik time to deregister this backend before we stop accepting.
+		time.Sleep(3 * time.Second)
+		// Wait for any in-flight job to complete (up to 5 minutes).
+		exec.Queue().Drain(5 * time.Minute)
+		// Stop registry and HTTP server.
+		_ = mgr.Stop()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutdownCtx)
-		_ = mgr.Stop()
 	}()
 
 	slog.Info("RollHook starting", "port", port)

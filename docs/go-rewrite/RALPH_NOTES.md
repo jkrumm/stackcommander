@@ -240,3 +240,40 @@ FIFO channel-based job queue (`internal/jobs/queue.go`), service discovery via D
 - Thread a cancellable context from the queue worker into `execute()` so SIGTERM can interrupt in-flight pulls/rollouts.
 - `TestRollout_FirstDeploy` / `TestRollout_NormalDeploy` as integration tests (require Docker + docker compose in PATH) — scale count behaviour is currently covered by `TestScaleTarget` unit test.
 - Notifier config could be passed as a constructor arg to `Executor` (injected at startup) rather than read from env at each job execution — would enable cleaner testing of the executor's notification path.
+
+---
+
+## Group 8: Full API Surface + Wire-Up
+
+### What was implemented
+Implemented all HTTP handlers with full logic (replacing 501 stubs): `POST /deploy` enqueues jobs, `GET /jobs`/`GET /jobs/{id}` query SQLite via `db.Store`, `GET /jobs/{id}/logs` streams SSE from the log file with `[DONE]` terminator. Wired all components (DB, Docker client, Executor) in `main.go`. Graceful shutdown follows the full sequence: `state.StartShutdown()` → 3s Traefik drain → `exec.Queue().Drain(5min)` → stop registry → `srv.Shutdown()`. Added 11 API unit tests covering all endpoints.
+
+### Deviations from prompt
+- **`RegisterJobs` renamed to `RegisterJobsAPI`** and the SSE huma stub removed — keeping a dead huma stub would cause chi route conflicts when adding the raw SSE handler on the same path.
+- **`GET /jobs` wraps result in `{"jobs":[...]}`** matching the spec and dashboard `data.json` format. The TypeScript server returned a bare array; E2E tests will need adjustment in Group 9.
+- **`GET /jobs/{id}` returns job object directly** (not wrapped) — matches `pollJobUntilDone()` which accesses `job.status` directly on the parsed response.
+- **Curl smoke test skipped** — Zot binary not installed on dev machine; server fails at `mgr.Start()`. Validated via API unit tests instead.
+- **`io.EOF` sentinel used** — `bufio.Reader.ReadString` on a file being appended returns `("partial", io.EOF)` at EOF; the partial buffer is preserved across retries since the reader's internal position doesn't reset.
+
+### Gotchas & surprises
+- **huma registers routes on the underlying chi router** — registering `/jobs/{id}/logs` directly on chi after huma registers `/jobs/{id}` is safe; chi's radix tree treats them as distinct routes (different path depth).
+- **`bufio.Reader` tail-follow**: after `ReadString` returns `io.EOF` with a partial line, the partial string is returned but the reader's position doesn't reset. On the next iteration after sleeping 100ms, `ReadString` continues from where it left off. No seek required.
+- **Async executor errors in tests** are benign: `Submit` returns synchronously after enqueuing, but the queue goroutine continues after `sqlDB.Close()`. The "sql: database is closed" log lines don't fail any tests.
+- **huma validates `required:"true"` at schema layer** — missing `image_tag` yields 422 (schema validation), not the handler's explicit 400 guard. Both are acceptable per the spec.
+
+### Security notes
+- The SSE endpoint uses `middleware.RequireAuth(secret)` (chi middleware) not huma's security middleware, since it bypasses huma entirely. Both use `strings.CutPrefix` — no silent passthrough on missing `Bearer ` prefix.
+
+### Tests added
+- `internal/api/api_test.go` (11 tests):
+  - `TestDeploy_MissingImageTag`, `TestDeploy_Valid`, `TestDeploy_Unauthorized`
+  - `TestListJobs_Empty`, `TestListJobs_WithFilter`
+  - `TestGetJob_NotFound`, `TestGetJob_Found`
+  - `TestStreamLogs_NotFound`, `TestStreamLogs_TerminalJob`, `TestStreamLogs_Unauthorized`
+  - `TestDeploy_AppNameExtraction` (table-driven, 3 cases)
+- Full suite: 74 tests across all packages, all pass.
+
+### Future improvements
+- Smoke test once Zot is in dev PATH: `ROLLHOOK_SECRET=test-secret-7 go run ./cmd/rollhook &` then curl each endpoint.
+- SSE handler could use `fsnotify` for more efficient tail-follow instead of 100ms polling.
+- `newTestServer` rebuilds the full huma+chi stack per test — a shared suite-level fixture would be faster for large test runs.
