@@ -1,260 +1,66 @@
 # RollHook — Project Configuration
 
-## Project Overview
+## Critical Commands
 
-Webhook-driven rolling deployment orchestrator for Docker Compose stacks on self-hosted VPS. Receives GitHub Actions webhook calls, runs zero-downtime rolling deployments via Docker REST API, and streams job logs back to CI.
-
-**Stateless design:** No server-side config file needed. RollHook discovers the compose file and service name automatically from the running container's Docker Compose labels (`com.docker.compose.project.config_files` + `com.docker.compose.service`). The `image_tag` is the discovery key — one image = one service.
-
-**Companion repo:** `~/SourceRoot/rollhook-action` (`jkrumm/rollhook-action`) — GitHub Action that triggers deploys and streams SSE logs live to CI. Versioned independently (`v1.x`). Users reference it as `uses: jkrumm/rollhook-action@v1`.
-
-See: `~/Obsidian/Vault/03_Projects/rollhook.md`
-North Star Stack: `~/Obsidian/Vault/04_Areas/Engineering/north-star-stack.md`
-
-**Go gotchas:** If something behaves unexpectedly — a library API, stdlib quirk, Docker SDK type name, SQLite concurrency issue, Zot/Dockerfile constraint, huma panic, or orval codegen surprise — check `docs/GO_GOTCHAS.md` before researching externally. It contains battle-tested fixes from the full Go rewrite.
-
----
-
-## Repository Layout
-
-```
-rollhook/
-  go.mod / go.sum / .golangci.yml
-  cmd/
-    rollhook/main.go              # Entry point — validates env, starts Zot, DB, executor, HTTP
-    gendocs/main.go               # Spec generator — go run ./cmd/gendocs > apps/dashboard/openapi.json
-  internal/
-    api/         health.go, deploy.go, jobs.go
-    middleware/  auth.go
-    docker/      client.go, api.go
-    jobs/        queue.go, executor.go, steps/{discover,validate,pull,rollout}.go
-    registry/    manager.go, proxy.go, config.go
-    db/          client.go, jobs.go
-    notifier/    notifier.go
-    state/       state.go
-  apps/
-    dashboard/   React SPA (Vite, embedded via //go:embed — WIP)
-    marketing/   Astro marketing site (separate image)
-  packages/
-    rollhook/    npm types package (JobResult, JobStatus)
-  e2e/           Vitest E2E tests (56 tests, tests HTTP surface)
-  examples/      Reference compose stacks, bun-hello-world app
-  docs/
-    go-rewrite/  RALPH_NOTES.md, PLAN.md — implementation notes
-```
-
----
-
-## Tech Stack
-
-| Layer           | Choice                                           |
-| --------------- | ------------------------------------------------ |
-| Language        | Go 1.24.1                                        |
-| Router          | `github.com/go-chi/chi/v5`                       |
-| OpenAPI 3.1     | `github.com/danielgtaylor/huma/v2`               |
-| API Docs        | Scalar UI at `/openapi`, spec at `/openapi.json` |
-| SQLite          | `modernc.org/sqlite` (pure Go, no CGO)           |
-| Docker SDK      | `github.com/docker/docker/client`                |
-| Compose parsing | `github.com/compose-spec/compose-go/v2`          |
-| Registry        | Zot (embedded subprocess, `127.0.0.1:5000`)      |
-| OCI proxy       | `net/http/httputil` (stdlib)                     |
-| E2E tests       | Vitest (Bun-run), tests HTTP surface             |
-| Dashboard       | React 19, Vite, basalt-ui, Tailwind v4           |
-| Marketing       | Astro 5 (separate image, not touched by Go)      |
-
----
-
-## Go Commands
-
-Go is **not** installed locally — all Go commands run via Docker:
+**Go is not installed locally.** All Go commands run via Docker:
 
 ```bash
+# Build
+docker run --rm -v "$(pwd)":/workspace -w /workspace golang:1.24-alpine go build ./...
+
+# Test
+docker run --rm -v "$(pwd)":/workspace -w /workspace golang:1.24-alpine go test ./...
+
+# Regenerate openapi.json (redirect stderr first or go module logs corrupt the JSON):
 docker run --rm -v "$(pwd)":/workspace -w /workspace golang:1.24-alpine \
-  go build ./...
+  go run ./cmd/gendocs 2>/dev/null > apps/dashboard/openapi.json
 
-docker run --rm -v "$(pwd)":/workspace -w /workspace golang:1.24-alpine \
-  go test ./...
-
-# Generate openapi.json from huma operation definitions:
-docker run --rm -v "$(pwd)":/workspace -w /workspace golang:1.24-alpine \
-  go run ./cmd/gendocs > apps/dashboard/openapi.json
+# Then regenerate TypeScript types:
+bun run --filter @rollhook/dashboard generate:api
 ```
 
-CI runs `go build ./...`, `go vet ./...`, `go test ./...` natively (Go installed in CI).
+CI runs Go natively (`go build ./...`, `go vet ./...`, `go test ./...`).
+
+**OpenAPI generation chain:** huma operations → `cmd/gendocs` → `openapi.json` → orval → `src/api/generated/`. Commit `openapi.json` + `src/api/generated/` together.
 
 ---
 
-## Package Manager
+## Project-Specific Conventions
 
-**Bun** — used for TypeScript tooling (E2E, dashboard, marketing, linting).
+**Companion repo:** `~/SourceRoot/rollhook-action` (`jkrumm/rollhook-action`) — versioned independently (`v1.x`). Users reference as `uses: jkrumm/rollhook-action@v1`.
 
-```bash
-bun install                                      # Install all workspace deps
-bun run --filter @rollhook/dashboard generate:api  # Regenerate API types from spec
-bun run typecheck                                # Type-check TypeScript workspaces
-bun run lint                                     # Lint monorepo
-bun run lint:fix                                 # Auto-fix
-bun run test:e2e                                 # E2E tests (requires Docker)
-```
+**No `!` or `BREAKING CHANGE` in commits** — greenfield, no external consumers. All changes are `feat:` or `fix:`.
+
+**Types shared between packages** (`JobResult`, `JobStatus`) live in `packages/ui/src/types.ts`, exported from `@rollhook/ui`.
 
 ---
 
-## Root Scripts
+## Known Pitfalls
 
-| Command                   | Action                                              |
-| ------------------------- | --------------------------------------------------- |
-| `bun run generate:api`    | Regenerate `src/api/generated/` from `openapi.json` |
-| `bun run typecheck`       | Type-check all workspaces                           |
-| `bun run lint`            | Lint entire monorepo                                |
-| `bun run lint:fix`        | Auto-fix lint + formatting                          |
-| `bun run test:e2e`        | E2E tests (requires Docker)                         |
-| `bun run build:dashboard` | Vite build for dashboard                            |
+**huma response status:** always set `out.Status = http.StatusOK` immediately after `out := &FooOutput{}`. Zero value → `WriteHeader(0)` → panic.
 
----
-
-## Auth
-
-Single `ROLLHOOK_SECRET` bearer token. Min 7 characters, validated at startup.
-
-```go
-// Startup check in cmd/rollhook/main.go:
-secret := os.Getenv("ROLLHOOK_SECRET")
-if len(secret) < 7 {
-    log.Fatal("ROLLHOOK_SECRET must be set and at least 7 characters")
-}
-```
-
-Auth middleware (`internal/middleware/auth.go`): `strings.CutPrefix` for Bearer parsing — rejects missing prefix, not just wrong token.
-
-huma enforces auth via `UseMiddleware` checking `ctx.Operation().Security`. Public endpoints (`/health`, `/openapi`) have no `Security` field.
-
-SSE endpoint (`/jobs/{id}/logs`) uses `middleware.RequireAuth(secret)` as a chi middleware (bypasses huma).
-
----
-
-## Environment Variables
-
-| Var                        | Required | Purpose                                        |
-| -------------------------- | -------- | ---------------------------------------------- |
-| `ROLLHOOK_SECRET`          | yes      | Bearer token (min 7 chars), all routes         |
-| `DOCKER_HOST`              | no       | Docker daemon endpoint (default: local socket) |
-| `PORT`                     | no       | Listen port (default: `7700`)                  |
-| `DATA_DIR`                 | no       | Data directory (default: `data`)               |
-| `PUSHOVER_USER_KEY`        | no       | Pushover user key                              |
-| `PUSHOVER_APP_TOKEN`       | no       | Pushover app token                             |
-| `NOTIFICATION_WEBHOOK_URL` | no       | URL to POST job result JSON on completion      |
-
----
-
-## SQLite
-
-`modernc.org/sqlite` — `data/rollhook.db`, no CGO, no external deps.
-
-- `SetMaxOpenConns(1)` — serializes writes through one connection (prevents SQLITE_BUSY)
-- WAL mode — readers don't block the single writer
-- Job logs: `data/logs/<job-id>.log` (flat files, SSE-streamed via `GET /jobs/{id}/logs`)
-- `data/` is gitignored
-
----
-
-## Zot Registry
-
-Always-on embedded registry subprocess. Binds `127.0.0.1:5000`. Not externally accessible.
-
-**Key gotcha:** Zot pre-built binaries are dynamically linked (glibc). Use `debian:12-slim` runner, NOT Alpine. Alpine fails with ELF interpreter mismatch even though the binary file exists.
-
-**Docker2s2 compat mode** required in Zot config (`http.compat: ["docker2s2"]`). Without it, Zot rejects Docker v2 manifests (415) — `distSpecVersion` alone is not sufficient.
-
----
-
-## API Surface
-
-```
-POST  /deploy              # Bearer auth — enqueue rolling deploy
-GET   /jobs/{id}           # Bearer auth — job status + metadata
-GET   /jobs/{id}/logs      # Bearer auth — SSE log stream (text/event-stream)
-GET   /jobs                # Bearer auth — paginated history (?app=&status=&limit=)
-GET   /health              # No auth — status + version
-GET   /openapi             # No auth — Scalar UI
-GET   /openapi.json        # No auth — OpenAPI 3.1 spec
-GET   /v2/*                # Bearer/Basic auth — OCI proxy to Zot
-```
-
-OpenAPI spec is served at `/openapi.json` (huma default). Scalar UI is wired at `/openapi`.
-
----
-
-## Go Key Patterns
-
-### huma middleware auth
-
-Operations with `Security: []map[string][]string{{"bearer": {}}}` are checked by the huma `UseMiddleware` before the handler runs. Operations with no `Security` field are public.
-
-### huma response status
-
-Always initialize `out.Status = http.StatusOK` immediately after `out := &FooOutput{}`. Zero value (0) → `WriteHeader(0)` → panic.
-
-### SQLite concurrency
-
-`SetMaxOpenConns(1)` serializes all DB access. `busy_timeout=5000` is per-connection so it does NOT help with pool concurrency — only `SetMaxOpenConns(1)` fixes SQLITE_BUSY.
-
-### Docker SDK v28
-
-`ContainerList` returns `[]container.Summary` (not `types.Container`). Options types are in sub-packages (`container`, `image` under `api/types/`).
-
-### Graceful shutdown / SIGTERM
-
-`jobCtx` is decoupled from the signal context — SIGTERM does NOT cancel in-flight deploys.
-`cancelJobs()` is the safety valve, called only if `Drain(5 * time.Minute)` times out.
-
-Production compose must set `stop_grace_period: 3m` — Docker's default is 10 seconds which
-SIGKILLs the process before any deploy can finish.
-
+**RollHook compose `stop_grace_period: 3m`** — Docker's default 10 s SIGKILLs the process mid-deploy. Required in production:
 ```yaml
 services:
   rollhook:
     stop_grace_period: 3m
 ```
 
-### Auth middleware
+**SQLite:** `SetMaxOpenConns(1)` is the fix for `SQLITE_BUSY`, not `busy_timeout`. `busy_timeout` is per-connection and new pool connections don't inherit it.
 
-`middleware.HumaAuth(api, secret)` for huma operations — 401 for missing/malformed Bearer, 403 for wrong token.
-`middleware.RequireAuth(secret)` for chi routes (SSE) — same 401/403 distinction.
-Both use `subtle.ConstantTimeCompare` to prevent timing attacks.
+**`bun run X --cwd Y` recurses infinitely** in package.json scripts. Use `bun run --filter @pkg X` instead.
 
 ---
 
-## orval API Generation
+## References
 
-Generated types live in `apps/dashboard/src/api/generated/`. Committed as a baseline.
-
-**Regeneration workflow:**
-
-1. Change huma operations (add/modify endpoints)
-2. `docker run ... go run ./cmd/gendocs > apps/dashboard/openapi.json` — regenerate spec
-3. `bun run generate:api` — regenerate TypeScript types
-4. Commit `openapi.json` + `src/api/generated/` together
-
-The custom fetch instance (`src/api/client.ts`) injects `Authorization: Bearer <token>` on all calls. Call `setApiToken(token)` after authentication.
+- `docs/GO_GOTCHAS.md` — battle-tested fixes for Go stdlib, SQLite, Docker SDK, Zot, huma, orval, compose-go
+- `examples/compose.simple.yml` — full production stack (Traefik + RollHook + direct socket)
+- `examples/compose.socket.yml` — hardened variant with socket proxies
+- `examples/bun-hello-world/` — reference app with healthcheck + graceful shutdown
 
 ---
 
-## npm Package `rollhook`
+## When Something Seems Wrong
 
-Publishes shared TypeScript types. Published via `/release` skill.
-
-```ts
-export type { JobResult, JobStatus }
-```
-
----
-
-## Git Workflow
-
-Follow SourceRoot conventions (see `~/SourceRoot/CLAUDE.md`):
-
-- `/commit` for conventional commits
-- `/pr` for GitHub PR workflow
-- No ticket numbers (personal project)
-- No AI attribution
-- **NEVER use `!` or `BREAKING CHANGE` in commits** — this is a greenfield project with no external consumers. All changes are `feat:` or `fix:`, never `feat!:`. Major version bumps are forbidden.
+If you encounter confusing code, contradictory patterns, or something that doesn't match expectations — flag it explicitly rather than silently working around it. Suggest a codebase fix over a docs fix. Check `docs/GO_GOTCHAS.md` before researching library quirks externally.
