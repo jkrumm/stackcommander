@@ -14,8 +14,7 @@
     "basalt-ui": "0.2.2",
     "lucide-react": "^0.575.0",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "rollhook": "workspace:*"
+    "react-dom": "^19.2.4"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.1",
