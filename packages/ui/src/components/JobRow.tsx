@@ -1,4 +1,4 @@
-import type { JobResult } from 'rollhook'
+import type { JobResult } from '../types'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { StatusBadge } from './StatusBadge'

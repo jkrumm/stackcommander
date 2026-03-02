@@ -1,4 +1,4 @@
-import type { JobStatus } from 'rollhook'
+import type { JobStatus } from '../types'
 import { cn } from '../lib/utils'
 
 const statusConfig: Record<JobStatus, { label: string, className: string }> = {

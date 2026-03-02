@@ -1,5 +1,4 @@
-import type { LogLine } from '@rollhook/ui'
-import type { JobStatus } from 'rollhook'
+import type { JobStatus, LogLine } from '@rollhook/ui'
 import { LogDrawer } from '@rollhook/ui'
 import { useEffect, useRef, useState } from 'react'
 import { streamLogs } from '../lib/api'

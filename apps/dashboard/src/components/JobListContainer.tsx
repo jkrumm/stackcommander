@@ -1,4 +1,4 @@
-import type { JobResult } from 'rollhook'
+import type { JobResult } from '@rollhook/ui'
 import { JobList } from '@rollhook/ui'
 import { LogContainer } from './LogContainer'
 

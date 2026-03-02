@@ -1,4 +1,4 @@
-import type { JobResult, JobStatus } from 'rollhook'
+import type { JobResult, JobStatus } from '@rollhook/ui'
 import { ChevronDown, SlidersHorizontal } from 'lucide-react'
 
 const STATUSES: Array<{ label: string, selectLabel: string, value: JobStatus | undefined }> = [

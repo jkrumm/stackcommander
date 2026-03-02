@@ -1,4 +1,4 @@
-import type { JobResult, JobStatus } from 'rollhook'
+import type { JobResult, JobStatus } from '@rollhook/ui'
 import { setApiToken } from '../api/client'
 import { getJobs } from '../api/generated/jobs/jobs'
 

@@ -1,5 +1,4 @@
-import type { ChartDataPoint } from '@rollhook/ui'
-import type { JobResult } from 'rollhook'
+import type { ChartDataPoint, JobResult } from '@rollhook/ui'
 import { DeployChart, Logo } from '@rollhook/ui'
 import { useCallback, useEffect, useState } from 'react'
 import { fetchJobs } from '../lib/api'

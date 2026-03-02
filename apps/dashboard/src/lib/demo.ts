@@ -1,4 +1,4 @@
-import type { JobResult } from 'rollhook'
+import type { JobResult } from '@rollhook/ui'
 import rawData from '../demo/data.json'
 
 export interface DemoData {

@@ -1,3 +1,4 @@
+export type { JobResult, JobStatus } from './types'
 export { DeployChart } from './components/DeployChart'
 export type { ChartDataPoint } from './components/DeployChart'
 export { JobList } from './components/JobList'

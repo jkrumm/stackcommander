@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { JobResult } from 'rollhook'
+import type { JobResult } from '../types'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useRef } from 'react'
 import { JobRow } from './JobRow'

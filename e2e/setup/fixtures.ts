@@ -1,5 +1,18 @@
-import type { JobResult } from 'rollhook'
 import { execFileSync } from 'node:child_process'
+
+export type JobStatus = 'queued' | 'running' | 'success' | 'failed'
+
+export interface JobResult {
+  id: string
+  app: string
+  image_tag: string
+  status: JobStatus
+  created_at: string
+  updated_at: string
+  error?: string
+  compose_path?: string
+  service?: string
+}
 
 export const BASE_URL = 'http://localhost:7700'
 export const TRAEFIK_URL = 'http://localhost:9080'
