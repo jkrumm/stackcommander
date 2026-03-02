@@ -1,193 +1,63 @@
 # RollHook
 
-**Zero-downtime rolling Docker Compose deployments via webhooks.**
+**Webhook-triggered zero-downtime rolling deployments for Docker Compose.**
 
-[![npm](https://img.shields.io/npm/v/rollhook)](https://www.npmjs.com/package/rollhook)
 [![Docker](https://img.shields.io/badge/docker-registry.jkrumm.com%2Frollhook-blue)](https://registry.jkrumm.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
----
-
-## What it is
-
-RollHook receives a webhook from your CI pipeline, pulls the new image, and rolls it
-out across your Docker Compose service — one container at a time, waiting for each
-healthcheck to pass before proceeding.
-
-No config file. Integrate in one CI step. No dashboard, no provisioning, no vendor.
-
-### Scope
-
-RollHook handles rolling deployments. It does not:
-
-- Build or push images (that's your CI — GitHub Actions, Docker Buildx)
-- Manage DNS, TLS, or routing (that's your reverse proxy — Caddy, Traefik, nginx)
-- Provision or configure servers
-- Replace a full PaaS if you need multi-tenant ops
-
-A deployment monitoring dashboard and multi-VPS support are on the roadmap.
-
----
-
-## Architecture
-
-```mermaid
-flowchart LR
-    GH[GitHub Actions]
-    SC[RollHook\nport 7700]
-    PR[Reverse proxy\nCaddy / Traefik / nginx]
-    APP[App containers]
-
-    GH -->|POST /deploy\nimage_tag| SC
-    SC -->|rolling update| APP
-    PR -->|route traffic via\nDocker DNS| APP
-    SC -->|SSE log stream| GH
-```
-
-Your reverse proxy routes traffic to app containers via Docker's internal DNS — the service name resolves to all active containers automatically. During a rollout, old and new containers coexist briefly; the proxy load-balances between them until the old one is removed. RollHook orchestrates the deployment sequence and reports results.
-
----
-
-## Infra Setup
-
-RollHook runs alongside your existing reverse proxy — Caddy, Traefik, nginx, or any other. No proxy-specific configuration is required. Two production-ready reference stacks are provided in [`examples/`](examples/):
-
-| File                 | Purpose                                                                |
-| -------------------- | ---------------------------------------------------------------------- |
-| `compose.simple.yml` | Direct socket mount — minimal setup for trusted VPS                    |
-| `compose.socket.yml` | Socket proxy per service — least-privilege, recommended for production |
+Receives a deploy webhook from GitHub Actions, pulls the new image, rolls it out one container at a time — each gated on a healthcheck passing — streams logs live to CI. No config files. Stateless auto-discovery from running container labels.
 
 ---
 
 ## Quick Start
 
-### 1. Run RollHook
-
-The recommended setup uses a [socket proxy](https://github.com/Tecnativa/docker-socket-proxy) to limit Docker socket exposure. RollHook communicates with Docker via `DOCKER_HOST=tcp://socket-proxy:2375` instead of a direct socket mount — no host path dependency, no distro-specific plugin paths.
+### 1. Run RollHook on your VPS
 
 ```yaml
-# docker-compose.yml (on your VPS)
+# docker-compose.yml
 services:
-  socket-proxy:
-    image: tecnativa/docker-socket-proxy:latest
-    restart: unless-stopped
-    environment:
-      CONTAINERS: 1
-      SERVICES: 1
-      IMAGES: 1
-      INFO: 1
-      POST: 1 # required: RollHook issues write operations (scale, pull)
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - socket-proxy-net
-
   rollhook:
     image: registry.jkrumm.com/rollhook:latest
     restart: unless-stopped
-    depends_on:
-      - socket-proxy
     environment:
-      ROLLHOOK_SECRET: ${ROLLHOOK_SECRET}
-      DOCKER_HOST: tcp://socket-proxy:2375
-      # Optional: Pushover mobile notifications
-      # PUSHOVER_USER_KEY: ${PUSHOVER_USER_KEY}
-      # PUSHOVER_APP_TOKEN: ${PUSHOVER_APP_TOKEN}
+      ROLLHOOK_SECRET: ${ROLLHOOK_SECRET}   # openssl rand -hex 32
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
       - rollhook-data:/app/data
-      # Mount each app's compose directory at the same absolute path it has on the host.
-      # RollHook discovers the path from Docker Compose labels and reads the file
-      # from inside the container — the paths must match exactly.
-      # - /srv/stacks/my-api:/srv/stacks/my-api:ro
+      # Mount your stacks dir at the same absolute path it has on the host.
+      # RollHook reads compose files from inside the container — paths must match.
+      - ${STACKS_DIR:-/srv/stacks}:${STACKS_DIR:-/srv/stacks}:ro
+    ports:
+      - "7700:7700"
     networks:
-      - socket-proxy-net
-      - proxy # your reverse proxy network
-
-networks:
-  socket-proxy-net:
-    internal: true # isolated — only rollhook can reach socket-proxy
-  proxy:
-    external: true
+      - proxy   # same network as your reverse proxy
 
 volumes:
   rollhook-data:
+
+networks:
+  proxy:
+    external: true
 ```
 
-> **Minimal alternative:** replace the socket proxy with a direct socket mount and remove the `socket-proxy` service and `socket-proxy-net` network. Simpler, but gives RollHook full Docker socket access. See [Security](#security) for the threat model.
->
-> ```yaml
-> volumes:
->   - /var/run/docker.sock:/var/run/docker.sock
-> ```
+For a full production stack with Traefik + TLS, see [`examples/compose.simple.yml`](examples/compose.simple.yml).
 
-### 2. Ensure your app is running at least once
+### 2. Configure your app's compose.yml
 
-RollHook discovers the compose file and service automatically from the running container's Docker Compose labels — no server-side config file needed. This means the container must already exist before the first deploy.
-
-```bash
-# First-time setup: start your service manually (or via your normal deploy process)
-docker compose -f /srv/stacks/my-api/compose.yml up -d
-```
-
-Two things are required in your `compose.yml`:
-
-1. **`image: ${IMAGE_TAG:-...}`** — RollHook finds the running container by matching the image name you send in the webhook. RollHook passes `IMAGE_TAG` via a temp `--env-file` when invoking `docker compose up --scale`.
-2. **A `healthcheck:`** — the rolling deploy gates each container swap on the new container passing its healthcheck.
-
-See the [compose.yml requirements](#composeyml-requirements) section below for the full spec.
-
-> **Compose file access:** RollHook reads the compose file from inside the container. Mount each app's compose directory as a read-only bind mount at the same absolute path it has on the host:
->
-> ```yaml
-> volumes:
->   - /srv/stacks/my-api:/srv/stacks/my-api:ro
-> ```
-
-### 3. Trigger a deploy
-
-```bash
-curl -X POST https://your-vps:7700/deploy \
-  -H "Authorization: Bearer $ROLLHOOK_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"image_tag": "ghcr.io/you/my-api:abc123"}'
-
-# → blocks until complete
-# → {"job_id": "...", "app": "my-api", "status": "success"}
-# → HTTP 500 + error field on failure
-```
-
-Add `?async=true` to return immediately with `"status": "queued"` instead.
-
-Stream logs (webhook or admin token):
-
-```bash
-curl -N https://your-vps:7700/jobs/<job_id>/logs \
-  -H "Authorization: Bearer $ROLLHOOK_SECRET"
-```
-
----
-
-## `compose.yml` requirements
-
-For zero-downtime deployments to work correctly, each service must satisfy:
-
-1. **No `ports:` mapping** — your reverse proxy routes traffic via Docker's internal DNS; `ports:` prevents scaling to multiple instances
-2. **No `container_name:`** — fixed names prevent the scaler from creating a second instance
-3. **A `healthcheck:`** — the deployment waits for the new instance to be healthy before removing the old one
-4. **On the same Docker network as your proxy** — so the proxy can reach the service by its DNS name (e.g. `backend:3000`)
-
-Minimal example:
+Four requirements for zero-downtime:
 
 ```yaml
 services:
-  backend:
-    image: ${IMAGE_TAG:-registry.example.com/my-api:latest}
-    healthcheck:
+  api:
+    image: ${IMAGE_TAG:-registry.example.com/my-api:latest}  # 1. IMAGE_TAG var
+    healthcheck:                                              # 2. healthcheck required
       test: [CMD, curl, -f, http://localhost:3000/health]
       interval: 5s
       timeout: 5s
       start_period: 10s
       retries: 5
+    # 3. No ports: — proxy routes via Docker DNS, ports: blocks scaling
+    # 4. No container_name: — fixed names prevent a second instance from starting
     networks:
       - proxy
 
@@ -196,272 +66,84 @@ networks:
     external: true
 ```
 
-**How zero-downtime works without proxy config changes:** Docker's embedded DNS resolves the service name (`backend`) to all active containers in that service. During a rollout, old and new containers coexist — your proxy load-balances between them automatically. Once the old container is removed, only the new one remains. No dynamic discovery or label-watching required.
+Start the app manually once so RollHook can discover it from the running container's labels:
 
-**Traefik users:** Add [active health check labels](https://doc.traefik.io/traefik/routing/services/#health-check) so Traefik stops routing to the draining container immediately rather than waiting on passive checks. See [`examples/`](examples/) for reference stacks.
+```bash
+docker compose -f /srv/stacks/my-api/compose.yml up -d
+```
 
-**Image tag pattern:** use `${IMAGE_TAG:-registry.example.com/my-api:latest}` in `compose.yml`. RollHook merges `IMAGE_TAG=<full-uri>` into a job-scoped temp env file passed via `--env-file` to `docker compose up --scale` — your `.env` is never modified.
+### 3. Trigger deploys from GitHub Actions
+
+```yaml
+- uses: jkrumm/rollhook-action@v1
+  with:
+    url: ${{ secrets.ROLLHOOK_URL }}
+    token: ${{ secrets.ROLLHOOK_SECRET }}
+    image_tag: registry.example.com/my-api:${{ github.sha }}
+```
+
+The action POSTs the deploy, streams SSE logs live to the CI run, and fails the step on deployment failure. See [jkrumm/rollhook-action](https://github.com/jkrumm/rollhook-action) for full docs.
 
 ---
 
-## Graceful shutdown (required for zero-downtime)
+## Graceful Shutdown
 
-Your application **must** handle `SIGTERM` gracefully to avoid 502 errors during the container swap. Without this, the load balancer may route requests to an instance that has already stopped accepting connections.
+Your app needs to handle `SIGTERM` cleanly — otherwise the proxy may route requests to a container that has already stopped accepting connections.
 
-The pattern:
-
-1. On `SIGTERM`: return `503` from your health endpoint — the load balancer stops routing new requests
-2. Wait briefly for the load balancer to deregister (2–3 seconds covers the health check polling interval)
-3. Finish in-flight requests, then exit
-
-**Example (Bun):**
+Pattern: on `SIGTERM`, return `503` from `/health` (proxy stops routing), wait 2–3 s for deregister, drain in-flight requests, exit.
 
 ```ts
-import process from 'node:process'
-
+// Bun
 let isShuttingDown = false
-
-const server = Bun.serve({
-  port: Number(process.env.PORT ?? 3000),
-  fetch(req) {
-    const { pathname } = new URL(req.url)
-    if (pathname === '/health')
-      return new Response(isShuttingDown ? 'shutting down' : 'ok', { status: isShuttingDown ? 503 : 200 })
-    // ... your routes
-  },
-})
 
 process.on('SIGTERM', async () => {
   isShuttingDown = true
-  // Give Traefik time to deregister this instance (healthcheck interval + buffer)
   await new Promise(resolve => setTimeout(resolve, 3000))
-  await server.stop(true) // drain in-flight requests
+  await server.stop(true)
   process.exit(0)
 })
+
+// health handler:
+if (pathname === '/health')
+  return new Response('ok', { status: isShuttingDown ? 503 : 200 })
 ```
 
-**Example (Node/Express):**
-
-```ts
-import process from 'node:process'
-import express from 'express'
-
-let isShuttingDown = false
-const app = express()
-
-app.get('/health', (_, res) => {
-  res.status(isShuttingDown ? 503 : 200).send(isShuttingDown ? 'shutting down' : 'ok')
-})
-
-const server = app.listen(3000)
-
-process.on('SIGTERM', () => {
-  isShuttingDown = true
-  setTimeout(() => {
-    server.close(() => process.exit(0))
-  }, 3000)
-})
-```
-
-See [`examples/bun-hello-world/`](examples/bun-hello-world/) for a complete working reference.
-
----
-
-## API
-
-Interactive docs at `/openapi` (Scalar UI). Key routes:
-
-| Method | Route             | Auth         | Description                                                         |
-| ------ | ----------------- | ------------ | ------------------------------------------------------------------- |
-| `POST` | `/deploy`         | bearer       | Trigger rolling deployment (app derived from `image_tag`)           |
-| `GET`  | `/jobs/{id}`      | bearer       | Job status + metadata (includes `compose_path`, `service`, `error`) |
-| `GET`  | `/jobs/{id}/logs` | bearer       | SSE log stream (`text/event-stream`)                                |
-| `GET`  | `/jobs`           | bearer       | Paginated job history (`?app=&status=&limit=`)                      |
-| `GET`  | `/health`         | none         | Returns `200 { "status": "ok", "version": "..." }`                  |
-| `GET`  | `/openapi`        | none         | Scalar API docs                                                     |
-| `GET`  | `/openapi.json`   | none         | OpenAPI 3.1 spec (JSON)                                             |
-| `*`    | `/v2/*`           | bearer/basic | OCI proxy to embedded Zot registry                                  |
-
-**Auth:** `Authorization: Bearer <ROLLHOOK_SECRET>` header — single token, all protected routes.
-
----
-
-## Notifications
-
-RollHook sends notifications on deployment completion (success or failure).
-
-**Pushover** (mobile push): set environment variables on the server process:
-
-```bash
-PUSHOVER_USER_KEY=your-user-key
-PUSHOVER_APP_TOKEN=your-app-token
-```
-
-**Webhook**: set `NOTIFICATION_WEBHOOK_URL` as an environment variable. RollHook POSTs the full job result JSON to that URL on completion.
-
-Notification failures are written to the job log — they never affect job status.
+See [`examples/bun-hello-world/`](examples/bun-hello-world/) for a complete reference app.
 
 ---
 
 ## Environment Variables
 
-| Variable                   | Required | Description                                                                                     |
-| -------------------------- | -------- | ----------------------------------------------------------------------------------------------- |
-| `ROLLHOOK_SECRET`          | yes      | Bearer token (min 7 chars) — all routes                                                         |
-| `DOCKER_HOST`              | no       | Docker daemon endpoint (e.g. `tcp://socket-proxy:2375`). Defaults to the local socket if unset. |
-| `PORT`                     | no       | Port to listen on (default: `7700`)                                                             |
-| `PUSHOVER_USER_KEY`        | no       | Pushover user key for mobile notifications                                                      |
-| `PUSHOVER_APP_TOKEN`       | no       | Pushover app token for mobile notifications                                                     |
-| `NOTIFICATION_WEBHOOK_URL` | no       | URL to POST the full job result JSON to on completion                                           |
+| Var | Required | Description |
+|-|-|-|
+| `ROLLHOOK_SECRET` | yes | Bearer token (min 7 chars) — all protected routes |
+| `DOCKER_HOST` | no | Docker daemon endpoint (default: local socket) |
+| `PORT` | no | Listen port (default: `7700`) |
+| `PUSHOVER_USER_KEY` | no | Pushover mobile notifications |
+| `PUSHOVER_APP_TOKEN` | no | Pushover mobile notifications |
+| `NOTIFICATION_WEBHOOK_URL` | no | POST full job result JSON on completion |
 
 ---
 
-## Security
+## API
 
-### Threat model
+Interactive docs at `/openapi` on your running instance. Key routes:
 
-When using a direct socket mount, RollHook has effective root access on the Docker host via `/var/run/docker.sock`. A compromised `ROLLHOOK_SECRET` means an attacker can trigger arbitrary deployments with any image tag — treat it with the same sensitivity as an SSH private key.
+| Method | Route | Auth | Description |
+|-|-|-|-|
+| `POST` | `/deploy` | bearer | Trigger deploy (`?async=true` to not block) |
+| `GET` | `/jobs/{id}` | bearer | Job status + metadata |
+| `GET` | `/jobs/{id}/logs` | bearer | SSE log stream |
+| `GET` | `/jobs` | bearer | History (`?app=&status=&limit=`) |
+| `GET` | `/health` | none | `{ status, version }` |
+| `GET` | `/v2/*` | bearer/basic | OCI registry proxy |
 
-### Docker socket access
-
-**Recommended: socket proxy**
-
-Use [Tecnativa's docker-socket-proxy](https://github.com/Tecnativa/docker-socket-proxy) to restrict Docker API access to only the operations RollHook requires. Set `DOCKER_HOST=tcp://socket-proxy:2375` on RollHook and isolate the proxy on an internal network. Required permissions: `CONTAINERS=1 SERVICES=1 IMAGES=1 INFO=1 POST=1`.
-
-This approach also eliminates the distro-specific CLI plugin path problem: with `DOCKER_HOST` set, RollHook uses the Docker CLI bundled in the image to connect over TCP — no host bind mounts for docker-compose needed.
-
-**Alternative: direct socket mount**
-
-```yaml
-volumes:
-  - /var/run/docker.sock:/var/run/docker.sock
-```
-
-Simpler to configure but gives RollHook unrestricted Docker access. Acceptable for single-tenant VPS setups where the threat model is primarily external. The socket proxy is the better default for anything production-facing.
-
-### Token generation
-
-Generate strong tokens with:
-
-```bash
-openssl rand -hex 32
-```
-
-### HTTPS required
-
-Never expose port 7700 directly to the internet. Always place RollHook behind a reverse proxy with TLS termination — Cloudflare Tunnel, Caddy, Traefik, or nginx. Plaintext HTTP exposes your bearer token on every request.
-
-### Token scope
-
-`ROLLHOOK_SECRET` is the only credential. Store it as a CI secret — it covers the full CI journey: `POST /deploy`, `GET /jobs/:id`, and `GET /jobs/:id/logs`. If you run behind a reverse proxy, consider blocking `/jobs`, `/registry`, and `/openapi` from external networks and only exposing `/deploy` and `/health` to CI.
-
-### Future
-
-HMAC-SHA256 webhook signature verification (`X-Hub-Signature-256`) is planned as an optional hardening layer. This will let callers sign the exact payload with a shared secret, adding defense-in-depth against token-only leakage.
+**Auth:** `Authorization: Bearer <ROLLHOOK_SECRET>` on all protected routes.
 
 ---
 
-## Volume Mounts (when running in Docker)
+## Notifications
 
-| Path                   | Purpose                                                                                                                                                                                                           |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/app/data`            | SQLite DB + job logs (persist across restarts)                                                                                                                                                                    |
-| `/var/run/docker.sock` | Docker socket — only when using direct socket mount (not needed with `DOCKER_HOST`)                                                                                                                               |
-| `/srv/stacks/my-app`   | App compose directory — one read-only bind mount per deployed app, at the same absolute path as on the host. RollHook discovers the path from Docker labels and reads the compose file from inside the container. |
-
----
-
-## `rollhook` npm Package
-
-The `rollhook` npm package exports shared TypeScript types for working with the RollHook API programmatically.
-
-```ts
-import type { JobResult, JobStatus } from 'rollhook'
-// JobStatus: 'queued' | 'running' | 'success' | 'failed'
-// JobResult: full job record shape returned by GET /jobs/:id
-```
-
----
-
-## GitHub Actions integration
-
-Use the official [rollhook-action](https://github.com/jkrumm/rollhook-action) for real-time log streaming back to CI:
-
-```yaml
-- uses: jkrumm/rollhook-action@v1
-  with:
-    url: https://rollhook.example.com
-    token: ${{ secrets.ROLLHOOK_SECRET }}
-    image_tag: registry.example.com/my-api:${{ github.sha }}
-```
-
-The action POSTs the deploy trigger, then streams SSE logs live to the CI run and polls for the terminal state — no custom scripts needed. The app name is derived automatically from the image tag (`registry.example.com/org/my-api:tag` → `my-api`).
-
-**Inputs:** `url`, `token`, `image_tag`, `timeout` (default: 600s)
-**Outputs:** `job_id`, `status`
-
-**Alternative — plain curl:**
-
-```yaml
-- name: Deploy
-  run: |
-    curl --fail-with-body -sS -X POST ${{ secrets.ROLLHOOK_URL }}/deploy \
-      -H "Authorization: Bearer ${{ secrets.ROLLHOOK_SECRET }}" \
-      -H "Content-Type: application/json" \
-      -d '{"image_tag": "${{ env.REGISTRY }}/my-api:${{ github.sha }}"}'
-```
-
----
-
-## Testing
-
-### Commands
-
-| Command            | Description                                  |
-| ------------------ | -------------------------------------------- |
-| `go test ./...`    | Go unit tests (74 tests, no Docker required) |
-| `bun run test:e2e` | E2E tests (requires Docker)                  |
-
-### Test layers
-
-- **Go unit tests** — pure logic in isolation (auth middleware, DB CRUD, queue, Docker API helpers, notifier, rollout logic)
-- **E2E tests** — behavioral contracts against a live RollHook Docker container with real Docker and Traefik (56 tests)
-
-### Known gaps
-
-The following scenarios are not covered by the current test suite.
-
-| Area                   | Gap                                                                    | Risk   |
-| ---------------------- | ---------------------------------------------------------------------- | ------ |
-| `steps/rollout.go`     | Multi-service rollouts (2+ steps) — only single-service tested via E2E | Medium |
-| `cmd/rollhook/main.go` | Graceful SIGTERM: 503 response during shutdown, clean exit             | Low    |
-| `api/jobs.go`          | SSE stream abort mid-read, empty log file (404)                        | Low    |
-
----
-
-## Roadmap
-
-### MVP
-
-- [x] Bearer auth (`ROLLHOOK_SECRET` env var, single token)
-- [x] `POST /deploy` — accepts `image_tag`, derives app name, returns `job_id`
-- [x] `GET /jobs/:id` — status + metadata
-- [x] `GET /jobs/:id/logs` — SSE stream from `data/logs/<id>.log`
-- [x] `GET /jobs` — paginated job history with app/status filters
-- [x] Pre-deploy validation (`compose_path` existence check)
-- [x] Stateless auto-discovery — finds compose file and service from running container's Docker Compose labels
-- [x] Zero-downtime rolling deployment (scale → health-gate → remove old)
-- [x] Pushover + configurable webhook notifications (`NOTIFICATION_WEBHOOK_URL`)
-- [x] `rollhook` npm package (shared TypeScript types: `JobResult`, `JobStatus`)
-- [x] Example app with correct compose, healthcheck, and graceful shutdown
-- [x] Public Docker image: `registry.jkrumm.com/rollhook`
-- [x] `examples/compose.simple.yml` + `examples/compose.socket.yml` — production reference stacks (direct socket + hardened socket proxy)
-- [x] `jkrumm/rollhook-action` — GitHub Action with real-time SSE log streaming to CI
-
-### Post-MVP
-
-- [ ] Ordered multi-service steps with dependency graph
-- [ ] Rollback: `POST /deploy/rollback` (redeploy last successful image)
-- [ ] Multi-VPS support via Docker contexts
-- [ ] Static site deployment (nginx + Traefik labels)
-- [ ] Self-hosting guide + Hetzner quickstart
+Set `PUSHOVER_USER_KEY` + `PUSHOVER_APP_TOKEN` for mobile push on deploy completion.
+Set `NOTIFICATION_WEBHOOK_URL` to POST the full `JobResult` JSON anywhere.
+Notification failures are written to the job log — they never affect job status.
