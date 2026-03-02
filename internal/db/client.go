@@ -43,6 +43,11 @@ func Open(dataDir string) (*sql.DB, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
+	if err := database.Ping(); err != nil {
+		database.Close()
+		return nil, fmt.Errorf("ping database: %w", err)
+	}
+
 	return database, nil
 }
 

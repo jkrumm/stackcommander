@@ -7,7 +7,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -49,14 +48,51 @@ func main() {
 		log.Fatalf("unexpected status %d from /openapi.json", rr.Code)
 	}
 
-	// Pretty-print the JSON before writing to stdout.
-	var pretty bytes.Buffer
-	if err := json.Indent(&pretty, rr.Body.Bytes(), "", "  "); err != nil {
-		log.Fatalf("indent JSON: %v", err)
+	// Decode the spec so we can inject the SSE endpoint that bypasses huma routing.
+	var spec map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &spec); err != nil {
+		log.Fatalf("unmarshal spec: %v", err)
 	}
-	pretty.WriteByte('\n')
 
-	if _, err := os.Stdout.Write(pretty.Bytes()); err != nil {
+	// GET /jobs/{id}/logs is a raw chi SSE handler — huma can't describe it natively.
+	// Inject it manually so the spec (and Scalar UI) document the endpoint.
+	paths, _ := spec["paths"].(map[string]any)
+	paths["/jobs/{id}/logs"] = map[string]any{
+		"get": map[string]any{
+			"operationId": "stream-job-logs",
+			"summary":     "Stream job logs",
+			"description": "Streams deployment log lines as Server-Sent Events (`text/event-stream`). Each `data:` event carries a single log line. The stream ends with a `data: [DONE]` sentinel when the job reaches a terminal state.",
+			"tags":        []string{"Jobs"},
+			"security":    []any{map[string]any{"bearer": []any{}}},
+			"parameters": []any{
+				map[string]any{
+					"name":        "id",
+					"in":          "path",
+					"required":    true,
+					"description": "Job UUID",
+					"schema":      map[string]any{"type": "string"},
+				},
+			},
+			"responses": map[string]any{
+				"200": map[string]any{
+					"description": "SSE log stream",
+					"content": map[string]any{
+						"text/event-stream": map[string]any{
+							"schema": map[string]any{"type": "string"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	out, err := json.MarshalIndent(spec, "", "  ")
+	if err != nil {
+		log.Fatalf("marshal spec: %v", err)
+	}
+	out = append(out, '\n')
+
+	if _, err := os.Stdout.Write(out); err != nil {
 		log.Fatal(err)
 	}
 }

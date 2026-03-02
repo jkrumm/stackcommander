@@ -40,10 +40,32 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run test
 
+  go-checks:
+    name: Go Build, Test & OpenAPI Drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.1
+          cache: true
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Check OpenAPI spec is up to date
+        run: |
+          go run ./cmd/gendocs 2>/dev/null > /tmp/fresh_openapi.json
+          if ! diff -u apps/dashboard/openapi.json /tmp/fresh_openapi.json; then
+            echo ""
+            echo "openapi.json is out of date. Regenerate:"
+            echo "  docker run --rm -v \$(pwd):/workspace -w /workspace golang:1.24-alpine go run ./cmd/gendocs > apps/dashboard/openapi.json"
+            exit 1
+          fi
+
   e2e-test:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: [lint-typecheck, unit-test]
+    needs: [lint-typecheck, unit-test, go-checks]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

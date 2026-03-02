@@ -271,16 +271,16 @@ See [`examples/bun-hello-world/`](examples/bun-hello-world/) for a complete work
 
 Interactive docs at `/openapi` (Scalar UI). Key routes:
 
-| Method | Route | Auth | Description |
-|-|-|-|-|
-| `POST` | `/deploy` | bearer | Trigger rolling deployment (app derived from `image_tag`) |
-| `GET` | `/jobs/{id}` | bearer | Job status + metadata (includes `compose_path`, `service`, `error`) |
-| `GET` | `/jobs/{id}/logs` | bearer | SSE log stream (`text/event-stream`) |
-| `GET` | `/jobs` | bearer | Paginated job history (`?app=&status=&limit=`) |
-| `GET` | `/health` | none | Returns `200 { "status": "ok", "version": "..." }` |
-| `GET` | `/openapi` | none | Scalar API docs |
-| `GET` | `/openapi.json` | none | OpenAPI 3.1 spec (JSON) |
-| `*` | `/v2/*` | bearer/basic | OCI proxy to embedded Zot registry |
+| Method | Route             | Auth         | Description                                                         |
+| ------ | ----------------- | ------------ | ------------------------------------------------------------------- |
+| `POST` | `/deploy`         | bearer       | Trigger rolling deployment (app derived from `image_tag`)           |
+| `GET`  | `/jobs/{id}`      | bearer       | Job status + metadata (includes `compose_path`, `service`, `error`) |
+| `GET`  | `/jobs/{id}/logs` | bearer       | SSE log stream (`text/event-stream`)                                |
+| `GET`  | `/jobs`           | bearer       | Paginated job history (`?app=&status=&limit=`)                      |
+| `GET`  | `/health`         | none         | Returns `200 { "status": "ok", "version": "..." }`                  |
+| `GET`  | `/openapi`        | none         | Scalar API docs                                                     |
+| `GET`  | `/openapi.json`   | none         | OpenAPI 3.1 spec (JSON)                                             |
+| `*`    | `/v2/*`           | bearer/basic | OCI proxy to embedded Zot registry                                  |
 
 **Auth:** `Authorization: Bearer <ROLLHOOK_SECRET>` header — single token, all protected routes.
 
@@ -417,10 +417,10 @@ The action POSTs the deploy trigger, then streams SSE logs live to the CI run an
 
 ### Commands
 
-| Command | Description |
-|-|-|
-| `go test ./...` | Go unit tests (74 tests, no Docker required) |
-| `bun run test:e2e` | E2E tests (requires Docker) |
+| Command            | Description                                  |
+| ------------------ | -------------------------------------------- |
+| `go test ./...`    | Go unit tests (74 tests, no Docker required) |
+| `bun run test:e2e` | E2E tests (requires Docker)                  |
 
 ### Test layers
 
@@ -431,11 +431,11 @@ The action POSTs the deploy trigger, then streams SSE logs live to the CI run an
 
 The following scenarios are not covered by the current test suite.
 
-| Area | Gap | Risk |
-|-|-|-|
-| `steps/rollout.go` | Multi-service rollouts (2+ steps) — only single-service tested via E2E | Medium |
-| `cmd/rollhook/main.go` | Graceful SIGTERM: 503 response during shutdown, clean exit | Low |
-| `api/jobs.go` | SSE stream abort mid-read, empty log file (404) | Low |
+| Area                   | Gap                                                                    | Risk   |
+| ---------------------- | ---------------------------------------------------------------------- | ------ |
+| `steps/rollout.go`     | Multi-service rollouts (2+ steps) — only single-service tested via E2E | Medium |
+| `cmd/rollhook/main.go` | Graceful SIGTERM: 503 response during shutdown, clean exit             | Low    |
+| `api/jobs.go`          | SSE stream abort mid-read, empty log file (404)                        | Low    |
 
 ---
 

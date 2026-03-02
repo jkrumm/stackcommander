@@ -10,7 +10,7 @@ export default antfu({
     '**/.output/**',
     '**/node_modules/**',
     'apps/marketing/.astro/**',
-    'apps/server/public/**',
+    'apps/dashboard/src/api/generated/**',
     'docs/**',
   ],
 })

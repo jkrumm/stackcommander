@@ -114,3 +114,39 @@ export const getJob = async (id: string, options?: RequestInit): Promise<getJobR
 );}
   
 
+/**
+ * Streams deployment log lines as Server-Sent Events (`text/event-stream`). Each `data:` event carries a single log line. The stream ends with a `data: [DONE]` sentinel when the job reaches a terminal state.
+ * @summary Stream job logs
+ */
+export type streamJobLogsResponse200 = {
+  data: string
+  status: 200
+}
+
+export type streamJobLogsResponseSuccess = (streamJobLogsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type streamJobLogsResponse = (streamJobLogsResponseSuccess)
+
+export const getStreamJobLogsUrl = (id: string,) => {
+
+
+  
+
+  return `/jobs/${id}/logs`
+}
+
+export const streamJobLogs = async (id: string, options?: RequestInit): Promise<streamJobLogsResponse> => {
+  
+  return customInstance<streamJobLogsResponse>(getStreamJobLogsUrl(id),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+  
+
