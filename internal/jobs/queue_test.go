@@ -1,6 +1,7 @@
 package jobs_test
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -10,13 +11,13 @@ import (
 )
 
 func TestQueue_FIFO(t *testing.T) {
-	q := jobs.NewQueue()
+	q := jobs.NewQueue(context.Background())
 	var mu sync.Mutex
 	var results []int
 
 	for i := range 3 {
 		n := i
-		q.Enqueue(func() {
+		q.Enqueue(func(_ context.Context) {
 			mu.Lock()
 			results = append(results, n)
 			mu.Unlock()
@@ -33,12 +34,12 @@ func TestQueue_FIFO(t *testing.T) {
 }
 
 func TestQueue_Sequential(t *testing.T) {
-	q := jobs.NewQueue()
+	q := jobs.NewQueue(context.Background())
 	var active atomic.Int32
 	var overlap atomic.Bool
 
 	for range 5 {
-		q.Enqueue(func() {
+		q.Enqueue(func(_ context.Context) {
 			if active.Add(1) > 1 {
 				overlap.Store(true)
 			}
@@ -55,10 +56,10 @@ func TestQueue_Sequential(t *testing.T) {
 }
 
 func TestQueue_Drain(t *testing.T) {
-	q := jobs.NewQueue()
+	q := jobs.NewQueue(context.Background())
 	var done atomic.Bool
 
-	q.Enqueue(func() {
+	q.Enqueue(func(_ context.Context) {
 		time.Sleep(20 * time.Millisecond)
 		done.Store(true)
 	})
@@ -73,7 +74,7 @@ func TestQueue_Drain(t *testing.T) {
 }
 
 func TestQueue_DrainNoopsAfterFirst(t *testing.T) {
-	q := jobs.NewQueue()
+	q := jobs.NewQueue(context.Background())
 	q.Drain(time.Second)
 
 	// Second Drain should return true immediately without panic.
@@ -84,14 +85,38 @@ func TestQueue_DrainNoopsAfterFirst(t *testing.T) {
 }
 
 func TestQueue_EnqueueAfterDrainIsNoOp(t *testing.T) {
-	q := jobs.NewQueue()
+	q := jobs.NewQueue(context.Background())
 	q.Drain(time.Second)
 
 	// Enqueue after drain must not panic and must not run the job.
 	var ran atomic.Bool
-	q.Enqueue(func() { ran.Store(true) })
+	q.Enqueue(func(_ context.Context) { ran.Store(true) })
 	time.Sleep(20 * time.Millisecond)
 	if ran.Load() {
 		t.Error("job enqueued after Drain should not execute")
+	}
+}
+
+func TestQueue_ContextCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	q := jobs.NewQueue(ctx)
+
+	started := make(chan struct{})
+	stopped := make(chan struct{})
+
+	q.Enqueue(func(ctx context.Context) {
+		close(started)
+		<-ctx.Done() // blocks until context is cancelled
+		close(stopped)
+	})
+
+	<-started
+	cancel()
+
+	select {
+	case <-stopped:
+		// ok — job received cancellation signal
+	case <-time.After(time.Second):
+		t.Fatal("job did not receive context cancellation within 1s")
 	}
 }

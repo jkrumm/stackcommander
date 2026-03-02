@@ -45,20 +45,20 @@ rollhook/
 
 ## Tech Stack
 
-| Layer | Choice |
-|-|-|
-| Language | Go 1.24.1 |
-| Router | `github.com/go-chi/chi/v5` |
-| OpenAPI 3.1 | `github.com/danielgtaylor/huma/v2` |
-| API Docs | Scalar UI at `/openapi`, spec at `/openapi.json` |
-| SQLite | `modernc.org/sqlite` (pure Go, no CGO) |
-| Docker SDK | `github.com/docker/docker/client` |
-| Compose parsing | `github.com/compose-spec/compose-go/v2` |
-| Registry | Zot (embedded subprocess, `127.0.0.1:5000`) |
-| OCI proxy | `net/http/httputil` (stdlib) |
-| E2E tests | Vitest (Bun-run), tests HTTP surface |
-| Dashboard | React 19, Vite, basalt-ui, Tailwind v4 |
-| Marketing | Astro 5 (separate image, not touched by Go) |
+| Layer           | Choice                                           |
+| --------------- | ------------------------------------------------ |
+| Language        | Go 1.24.1                                        |
+| Router          | `github.com/go-chi/chi/v5`                       |
+| OpenAPI 3.1     | `github.com/danielgtaylor/huma/v2`               |
+| API Docs        | Scalar UI at `/openapi`, spec at `/openapi.json` |
+| SQLite          | `modernc.org/sqlite` (pure Go, no CGO)           |
+| Docker SDK      | `github.com/docker/docker/client`                |
+| Compose parsing | `github.com/compose-spec/compose-go/v2`          |
+| Registry        | Zot (embedded subprocess, `127.0.0.1:5000`)      |
+| OCI proxy       | `net/http/httputil` (stdlib)                     |
+| E2E tests       | Vitest (Bun-run), tests HTTP surface             |
+| Dashboard       | React 19, Vite, basalt-ui, Tailwind v4           |
+| Marketing       | Astro 5 (separate image, not touched by Go)      |
 
 ---
 
@@ -99,14 +99,14 @@ bun run test:e2e                                 # E2E tests (requires Docker)
 
 ## Root Scripts
 
-| Command | Action |
-|-|-|
-| `bun run generate:api` | Regenerate `src/api/generated/` from `openapi.json` |
-| `bun run typecheck` | Type-check all workspaces |
-| `bun run lint` | Lint entire monorepo |
-| `bun run lint:fix` | Auto-fix lint + formatting |
-| `bun run test:e2e` | E2E tests (requires Docker) |
-| `bun run build:dashboard` | Vite build for dashboard |
+| Command                   | Action                                              |
+| ------------------------- | --------------------------------------------------- |
+| `bun run generate:api`    | Regenerate `src/api/generated/` from `openapi.json` |
+| `bun run typecheck`       | Type-check all workspaces                           |
+| `bun run lint`            | Lint entire monorepo                                |
+| `bun run lint:fix`        | Auto-fix lint + formatting                          |
+| `bun run test:e2e`        | E2E tests (requires Docker)                         |
+| `bun run build:dashboard` | Vite build for dashboard                            |
 
 ---
 
@@ -132,15 +132,15 @@ SSE endpoint (`/jobs/{id}/logs`) uses `middleware.RequireAuth(secret)` as a chi 
 
 ## Environment Variables
 
-| Var | Required | Purpose |
-|-|-|-|
-| `ROLLHOOK_SECRET` | yes | Bearer token (min 7 chars), all routes |
-| `DOCKER_HOST` | no | Docker daemon endpoint (default: local socket) |
-| `PORT` | no | Listen port (default: `7700`) |
-| `DATA_DIR` | no | Data directory (default: `data`) |
-| `PUSHOVER_USER_KEY` | no | Pushover user key |
-| `PUSHOVER_APP_TOKEN` | no | Pushover app token |
-| `NOTIFICATION_WEBHOOK_URL` | no | URL to POST job result JSON on completion |
+| Var                        | Required | Purpose                                        |
+| -------------------------- | -------- | ---------------------------------------------- |
+| `ROLLHOOK_SECRET`          | yes      | Bearer token (min 7 chars), all routes         |
+| `DOCKER_HOST`              | no       | Docker daemon endpoint (default: local socket) |
+| `PORT`                     | no       | Listen port (default: `7700`)                  |
+| `DATA_DIR`                 | no       | Data directory (default: `data`)               |
+| `PUSHOVER_USER_KEY`        | no       | Pushover user key                              |
+| `PUSHOVER_APP_TOKEN`       | no       | Pushover app token                             |
+| `NOTIFICATION_WEBHOOK_URL` | no       | URL to POST job result JSON on completion      |
 
 ---
 
@@ -185,15 +185,19 @@ OpenAPI spec is served at `/openapi.json` (huma default). Scalar UI is wired at 
 ## Go Key Patterns
 
 ### huma middleware auth
+
 Operations with `Security: []map[string][]string{{"bearer": {}}}` are checked by the huma `UseMiddleware` before the handler runs. Operations with no `Security` field are public.
 
 ### huma response status
+
 Always initialize `out.Status = http.StatusOK` immediately after `out := &FooOutput{}`. Zero value (0) → `WriteHeader(0)` → panic.
 
 ### SQLite concurrency
+
 `SetMaxOpenConns(1)` serializes all DB access. `busy_timeout=5000` is per-connection so it does NOT help with pool concurrency — only `SetMaxOpenConns(1)` fixes SQLITE_BUSY.
 
 ### Docker SDK v28
+
 `ContainerList` returns `[]container.Summary` (not `types.Container`). Options types are in sub-packages (`container`, `image` under `api/types/`).
 
 ---
@@ -203,6 +207,7 @@ Always initialize `out.Status = http.StatusOK` immediately after `out := &FooOut
 Generated types live in `apps/dashboard/src/api/generated/`. Committed as a baseline.
 
 **Regeneration workflow:**
+
 1. Change huma operations (add/modify endpoints)
 2. `docker run ... go run ./cmd/gendocs > apps/dashboard/openapi.json` — regenerate spec
 3. `bun run generate:api` — regenerate TypeScript types

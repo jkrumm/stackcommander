@@ -67,8 +67,10 @@ func main() {
 	}
 	defer cli.Close()
 
-	// Job executor (creates and starts the internal queue)
-	exec := jobs.NewExecutor(store, cli, secret, dataDir)
+	// Job executor (creates and starts the internal queue).
+	// ctx is the SIGTERM-cancellable signal context — cancelling it interrupts
+	// any in-flight docker pull or compose rollout.
+	exec := jobs.NewExecutor(ctx, store, cli, secret, dataDir)
 
 	r := chi.NewRouter()
 

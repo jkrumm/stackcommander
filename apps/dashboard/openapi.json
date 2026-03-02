@@ -447,6 +447,44 @@
           "Jobs"
         ]
       }
+    },
+    "/jobs/{id}/logs": {
+      "get": {
+        "description": "Streams deployment log lines as Server-Sent Events (`text/event-stream`). Each `data:` event carries a single log line. The stream ends with a `data: [DONE]` sentinel when the job reaches a terminal state.",
+        "operationId": "stream-job-logs",
+        "parameters": [
+          {
+            "description": "Job UUID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "SSE log stream"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Stream job logs",
+        "tags": [
+          "Jobs"
+        ]
+      }
     }
   }
 }

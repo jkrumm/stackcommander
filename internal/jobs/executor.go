@@ -26,11 +26,12 @@ type Executor struct {
 }
 
 // NewExecutor creates an Executor with a started internal queue.
-func NewExecutor(store *db.Store, cli *client.Client, secret, dataDir string) *Executor {
+// ctx is forwarded to the queue so SIGTERM can interrupt in-flight deploys.
+func NewExecutor(ctx context.Context, store *db.Store, cli *client.Client, secret, dataDir string) *Executor {
 	return &Executor{
 		store:   store,
 		docker:  cli,
-		queue:   NewQueue(),
+		queue:   NewQueue(ctx),
 		secret:  secret,
 		dataDir: dataDir,
 	}
@@ -68,7 +69,7 @@ func (e *Executor) Submit(job db.Job) error {
 	logPath := db.LogPath(e.dataDir, job.ID)
 	_ = db.AppendLog(logPath, fmt.Sprintf("[queue] Deployment queued: %s @ %s", job.App, job.ImageTag))
 
-	e.queue.Enqueue(func() { e.run(job) })
+	e.queue.Enqueue(func(ctx context.Context) { e.run(ctx, job) })
 	return nil
 }
 
@@ -85,7 +86,7 @@ func extractApp(imageTag string) string {
 	return last
 }
 
-func (e *Executor) run(job db.Job) {
+func (e *Executor) run(ctx context.Context, job db.Job) {
 	logPath := db.LogPath(e.dataDir, job.ID)
 	log := func(line string) {
 		if err := db.AppendLog(logPath, line); err != nil {
@@ -100,7 +101,7 @@ func (e *Executor) run(job db.Job) {
 
 	finalStatus := db.StatusSuccess
 	var finalErr *string
-	if err := e.execute(context.Background(), job, log); err != nil {
+	if err := e.execute(ctx, job, log); err != nil {
 		finalStatus = db.StatusFailed
 		msg := err.Error()
 		finalErr = &msg

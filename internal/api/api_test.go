@@ -45,7 +45,7 @@ func newTestServer(t *testing.T) (http.Handler, *db.Store, string) {
 		t.Cleanup(func() { cli.Close() })
 	}
 
-	exec := jobs.NewExecutor(store, cli, testSecret, dataDir)
+	exec := jobs.NewExecutor(context.Background(), store, cli, testSecret, dataDir)
 
 	r := chi.NewRouter()
 	config := huma.DefaultConfig("RollHook", "test")

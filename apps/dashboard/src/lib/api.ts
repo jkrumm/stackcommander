@@ -1,4 +1,6 @@
 import type { JobResult, JobStatus } from 'rollhook'
+import { setApiToken } from '../api/client'
+import { getJobs } from '../api/generated/jobs/jobs'
 
 const IS_DEMO = import.meta.env.DEV || import.meta.env.MODE === 'demo'
 
@@ -6,10 +8,7 @@ let _token = ''
 
 export function configureApi(token: string) {
   _token = token
-}
-
-function authHeaders(): Record<string, string> {
-  return { Authorization: `Bearer ${_token}` }
+  setApiToken(token)
 }
 
 async function getDemoData() {
@@ -30,17 +29,8 @@ export async function fetchJobs(params: { app?: string, status?: JobStatus, limi
       jobs = jobs.slice(0, params.limit)
     return jobs
   }
-  const search = new URLSearchParams()
-  if (params.app)
-    search.set('app', params.app)
-  if (params.status)
-    search.set('status', params.status)
-  if (params.limit)
-    search.set('limit', String(params.limit))
-  const res = await fetch(`/jobs?${search}`, { headers: authHeaders() })
-  if (!res.ok)
-    throw new Error(`${res.status}`)
-  return res.json() as Promise<JobResult[]>
+  const result = await getJobs(params)
+  return ((result as { data: JobResult[] | null }).data ?? [])
 }
 
 export function streamLogs(jobId: string, onLine: (line: string) => void, signal: AbortSignal): Promise<void> {
@@ -61,7 +51,7 @@ export function streamLogs(jobId: string, onLine: (line: string) => void, signal
       })
     })
   }
-  return fetch(`/jobs/${jobId}/logs`, { headers: authHeaders(), signal })
+  return fetch(`/jobs/${jobId}/logs`, { headers: { Authorization: `Bearer ${_token}` }, signal })
     .then((res) => {
       if (!res.ok)
         throw new Error(`${res.status}`)
