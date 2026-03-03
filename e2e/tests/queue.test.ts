@@ -40,10 +40,14 @@ describe('job queue', () => {
     expect(job1.status).toBe('success')
     expect(job2.status).toBe('success')
 
-    // FIFO: the job created first must have finished before or at the same time as the second.
-    // Sequential queue means job2 cannot complete before job1.
-    expect(new Date(job1.updated_at).getTime()).toBeLessThanOrEqual(
-      new Date(job2.updated_at).getTime(),
+    // FIFO: the job with the earlier created_at must finish before or at the same time as the
+    // other. Sort by created_at to determine queue order — Promise.all sends both HTTP requests
+    // concurrently so res1/res2 don't reliably reflect enqueue order.
+    const [firstJob, secondJob] = [job1, job2].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    )
+    expect(new Date(firstJob.updated_at).getTime()).toBeLessThanOrEqual(
+      new Date(secondJob.updated_at).getTime(),
     )
 
     // After both deploys complete there must be exactly 1 container — each rollout

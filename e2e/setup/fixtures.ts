@@ -19,8 +19,8 @@ export const TRAEFIK_URL = 'http://localhost:9080'
 export const REGISTRY_HOST = 'localhost:7700'
 // App name as derived by the server from image tag: image.split('/').pop().split(':')[0]
 export const APP_NAME = 'rollhook-e2e-hello'
-// Docker Compose names containers as <project>-<service>-<index>, e.g. bun-hello-world-hello-world-1.
-export const CONTAINER_NAME_FILTER = 'bun-hello-world-hello-world'
+// Docker Compose names containers as <project>-<service>-<index>, e.g. hello-world-hello-world-1.
+export const CONTAINER_NAME_FILTER = 'hello-world-hello-world'
 
 // Count running containers whose name starts with the given prefix.
 export function getContainerCount(nameFilter: string = CONTAINER_NAME_FILTER): number {

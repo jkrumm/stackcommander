@@ -1,0 +1,84 @@
+# RollHook — getting started
+#
+# 1. Copy this file to your server and create a .env file next to it
+# 2. Replace "example.com" and "rollhook.example.com" with your actual domains
+# 3. Replace the "app" service with your own
+# 4. Run: docker compose up -d
+#
+# Supported reverse proxies: Traefik (used here), HAProxy, Nginx (nginx-proxy).
+# Caddy requires the caddy-docker-proxy community plugin.
+
+services:
+  traefik:
+    image: traefik:v3
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/data/acme.json
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      # Traefik watches the Docker socket to discover container labels.
+      # To limit socket exposure, replace with: github.com/Tecnativa/docker-socket-proxy
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-data:/data
+    restart: unless-stopped
+
+  rollhook:
+    image: registry.jkrumm.com/rollhook:latest
+    environment:
+      ROLLHOOK_SECRET: ${ROLLHOOK_SECRET}
+    volumes:
+      # RollHook needs read-write socket access to manage container lifecycle.
+      # To limit socket exposure, replace with: github.com/Tecnativa/docker-socket-proxy
+      - /var/run/docker.sock:/var/run/docker.sock
+      # RollHook runs `docker compose up --scale` during deploys — the compose file
+      # must be readable inside the container at the same path as on the host.
+      # Set COMPOSE_DIR in your .env to the directory where this compose.yml lives.
+      - ${COMPOSE_DIR}:${COMPOSE_DIR}:ro
+      - rollhook-data:/data
+    stop_grace_period: 3m
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.rollhook.rule=Host(`rollhook.example.com`)
+      - traefik.http.routers.rollhook.entrypoints=websecure
+      - traefik.http.routers.rollhook.tls.certresolver=letsencrypt
+      - traefik.http.services.rollhook.loadbalancer.server.port=7700
+      - traefik.http.services.rollhook.loadbalancer.healthcheck.path=/health
+      - traefik.http.services.rollhook.loadbalancer.healthcheck.interval=1s
+    restart: unless-stopped
+
+  # Replace this with your own service.
+  # No `ports:` needed — Traefik reaches your app via Docker's internal network.
+  # The healthcheck and Traefik healthcheck labels are both required for zero-downtime deploys.
+  app:
+    # RollHook acts as a registry proxy — push your images to rollhook.example.com/your-app:tag
+    # IMAGE_TAG is set by your CI pipeline on each deploy.
+    image: ${IMAGE_TAG:-rollhook.example.com/your-app:latest}
+    healthcheck:
+      test: [CMD, curl, -f, 'http://localhost:3000/health']
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s # increase if your app takes longer to start
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.app.rule=Host(`example.com`)
+      - traefik.http.routers.app.entrypoints=websecure
+      - traefik.http.routers.app.tls.certresolver=letsencrypt
+      # Change 3000 to your app's port (container-internal, not host-mapped)
+      - traefik.http.services.app.loadbalancer.server.port=3000
+      - traefik.http.services.app.loadbalancer.healthcheck.path=/health
+      - traefik.http.services.app.loadbalancer.healthcheck.interval=1s
+    restart: unless-stopped
+
+volumes:
+  traefik-data:
+  rollhook-data:

@@ -7,7 +7,7 @@ import { REGISTRY_HOST, ROLLHOOK_SECRET } from './fixtures.ts'
 const DIR = fileURLToPath(new URL('.', import.meta.url))
 const ROOT = join(DIR, '../..')
 const E2E_DIR = join(ROOT, 'e2e')
-const HELLO_WORLD_DIR = join(ROOT, 'examples/bun-hello-world')
+const HELLO_WORLD_DIR = join(E2E_DIR, 'hello-world')
 
 function composeE2E(args: string, extraEnv?: Record<string, string>): void {
   execSync(

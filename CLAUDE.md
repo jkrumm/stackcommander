@@ -40,6 +40,7 @@ CI runs Go natively (`go build ./...`, `go vet ./...`, `go test ./...`).
 **huma response status:** always set `out.Status = http.StatusOK` immediately after `out := &FooOutput{}`. Zero value → `WriteHeader(0)` → panic.
 
 **RollHook compose `stop_grace_period: 3m`** — Docker's default 10 s SIGKILLs the process mid-deploy. Required in production:
+
 ```yaml
 services:
   rollhook:
@@ -55,9 +56,8 @@ services:
 ## References
 
 - `docs/GO_GOTCHAS.md` — battle-tested fixes for Go stdlib, SQLite, Docker SDK, Zot, huma, orval, compose-go
-- `examples/compose.simple.yml` — full production stack (Traefik + RollHook + direct socket)
-- `examples/compose.socket.yml` — hardened variant with socket proxies
-- `examples/bun-hello-world/` — reference app with healthcheck + graceful shutdown
+- `compose.yml` — canonical production stack (Traefik + RollHook + example app service)
+- `e2e/hello-world/` — reference app with healthcheck + graceful shutdown
 
 ---
 

@@ -13,34 +13,23 @@ Receives a deploy webhook from GitHub Actions, pulls the new image, rolls it out
 
 ### 1. Run RollHook on your VPS
 
-```yaml
-# docker-compose.yml
-services:
-  rollhook:
-    image: registry.jkrumm.com/rollhook:latest
-    restart: unless-stopped
-    environment:
-      ROLLHOOK_SECRET: ${ROLLHOOK_SECRET}   # openssl rand -hex 32
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - rollhook-data:/app/data
-      # Mount your stacks dir at the same absolute path it has on the host.
-      # RollHook reads compose files from inside the container — paths must match.
-      - ${STACKS_DIR:-/srv/stacks}:${STACKS_DIR:-/srv/stacks}:ro
-    ports:
-      - "7700:7700"
-    networks:
-      - proxy   # same network as your reverse proxy
+Copy [`compose.yml`](compose.yml) from this repo to your server and create a `.env` file next to it:
 
-volumes:
-  rollhook-data:
-
-networks:
-  proxy:
-    external: true
+```env
+ACME_EMAIL=you@example.com
+ROLLHOOK_SECRET=changeme          # openssl rand -hex 32
+COMPOSE_DIR=/home/user/myapp      # directory where your compose.yml lives
 ```
 
-For a full production stack with Traefik + TLS, see [`examples/compose.simple.yml`](examples/compose.simple.yml).
+Secrets managers like [Doppler](https://doppler.com) and [Infisical](https://infisical.com) both support Docker Compose natively as `.env` alternatives.
+
+Then start the stack:
+
+```bash
+docker compose up -d
+```
+
+The included `compose.yml` contains Traefik (with automatic TLS via Let's Encrypt), RollHook, and a placeholder `app` service — replace it with your own.
 
 ### 2. Configure your app's compose.yml
 
@@ -49,8 +38,8 @@ Four requirements for zero-downtime:
 ```yaml
 services:
   api:
-    image: ${IMAGE_TAG:-registry.example.com/my-api:latest}  # 1. IMAGE_TAG var
-    healthcheck:                                              # 2. healthcheck required
+    image: ${IMAGE_TAG:-registry.example.com/my-api:latest} # 1. IMAGE_TAG var
+    healthcheck: # 2. healthcheck required
       test: [CMD, curl, -f, http://localhost:3000/health]
       interval: 5s
       timeout: 5s
@@ -108,20 +97,20 @@ if (pathname === '/health')
   return new Response('ok', { status: isShuttingDown ? 503 : 200 })
 ```
 
-See [`examples/bun-hello-world/`](examples/bun-hello-world/) for a complete reference app.
+See [`e2e/hello-world/`](e2e/hello-world/) for a complete reference app.
 
 ---
 
 ## Environment Variables
 
-| Var | Required | Description |
-|-|-|-|
-| `ROLLHOOK_SECRET` | yes | Bearer token (min 7 chars) — all protected routes |
-| `DOCKER_HOST` | no | Docker daemon endpoint (default: local socket) |
-| `PORT` | no | Listen port (default: `7700`) |
-| `PUSHOVER_USER_KEY` | no | Pushover mobile notifications |
-| `PUSHOVER_APP_TOKEN` | no | Pushover mobile notifications |
-| `NOTIFICATION_WEBHOOK_URL` | no | POST full job result JSON on completion |
+| Var                        | Required | Description                                       |
+| -------------------------- | -------- | ------------------------------------------------- |
+| `ROLLHOOK_SECRET`          | yes      | Bearer token (min 7 chars) — all protected routes |
+| `DOCKER_HOST`              | no       | Docker daemon endpoint (default: local socket)    |
+| `PORT`                     | no       | Listen port (default: `7700`)                     |
+| `PUSHOVER_USER_KEY`        | no       | Pushover mobile notifications                     |
+| `PUSHOVER_APP_TOKEN`       | no       | Pushover mobile notifications                     |
+| `NOTIFICATION_WEBHOOK_URL` | no       | POST full job result JSON on completion           |
 
 ---
 
@@ -129,14 +118,14 @@ See [`examples/bun-hello-world/`](examples/bun-hello-world/) for a complete refe
 
 Interactive docs at `/openapi` on your running instance. Key routes:
 
-| Method | Route | Auth | Description |
-|-|-|-|-|
-| `POST` | `/deploy` | bearer | Trigger deploy (`?async=true` to not block) |
-| `GET` | `/jobs/{id}` | bearer | Job status + metadata |
-| `GET` | `/jobs/{id}/logs` | bearer | SSE log stream |
-| `GET` | `/jobs` | bearer | History (`?app=&status=&limit=`) |
-| `GET` | `/health` | none | `{ status, version }` |
-| `GET` | `/v2/*` | bearer/basic | OCI registry proxy |
+| Method | Route             | Auth         | Description                                 |
+| ------ | ----------------- | ------------ | ------------------------------------------- |
+| `POST` | `/deploy`         | bearer       | Trigger deploy (`?async=true` to not block) |
+| `GET`  | `/jobs/{id}`      | bearer       | Job status + metadata                       |
+| `GET`  | `/jobs/{id}/logs` | bearer       | SSE log stream                              |
+| `GET`  | `/jobs`           | bearer       | History (`?app=&status=&limit=`)            |
+| `GET`  | `/health`         | none         | `{ status, version }`                       |
+| `GET`  | `/v2/*`           | bearer/basic | OCI registry proxy                          |
 
 **Auth:** `Authorization: Bearer <ROLLHOOK_SECRET>` on all protected routes.
 

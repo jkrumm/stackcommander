@@ -78,7 +78,7 @@ describe('deploy API', () => {
     expect(res.status).toBe(500)
     const body = await res.json() as { job_id: string, status: string, error: string }
     expect(body.status).toBe('failed')
-    expect(body.error).toContain('No running container found matching image')
+    expect(body.error).toContain('no running container found matching image')
 
     // compose_path and service must be null — discovery never completed
     const jobRes = await fetch(`${BASE_URL}/jobs/${body.job_id}`, { headers: adminHeaders() })
