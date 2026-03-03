@@ -65,8 +65,10 @@ func Rollout(ctx context.Context, cli *client.Client, composePath, service, proj
 	)
 	cmd.Dir = cwd
 	out, err := cmd.CombinedOutput()
-	if outStr := strings.TrimSpace(string(out)); outStr != "" {
-		logFn(fmt.Sprintf("[rollout] %s", outStr))
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			logFn(fmt.Sprintf("[rollout] %s", line))
+		}
 	}
 	if err != nil {
 		return fmt.Errorf("docker compose up --scale failed: %w", err)
