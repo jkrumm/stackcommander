@@ -39,7 +39,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v2.10.1
       - name: Check OpenAPI spec is up to date
         run: |
           go run ./cmd/gendocs 2>/dev/null > /tmp/fresh_openapi.json
