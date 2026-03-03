@@ -19,10 +19,6 @@ import (
 // pullLogPrefixes are the high-signal pull events forwarded to logFn.
 // A typical image with 20 layers emits 100+ lines; this filter keeps it to ~10.
 var pullLogPrefixes = []string{
-	"Pulling from",
-	"Pull complete",
-	"Already exists",
-	"Digest:",
 	"Status:",
 }
 

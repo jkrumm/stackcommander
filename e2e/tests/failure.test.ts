@@ -62,7 +62,7 @@ describe('failed deployment lifecycle', () => {
   it('job logs contain discover step before pull failure', async () => {
     const res = await fetch(`${BASE_URL}/jobs/${failedJob.id}/logs`, { headers: adminHeaders() })
     const text = await res.text()
-    expect(text).toContain('[discover] Discovery complete')
+    expect(text).toContain('[discover] ')
     expect(text).toContain('[pull]')
     expect(text).not.toContain('[rollout]')
   })

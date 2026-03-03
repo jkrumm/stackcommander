@@ -109,7 +109,6 @@ func (e *Executor) run(ctx context.Context, job db.Job) {
 		}
 	}
 
-	log(fmt.Sprintf("[executor] Starting deployment: %s @ %s", job.App, job.ImageTag))
 	if err := e.store.UpdateStatus(job.ID, db.StatusRunning, nil); err != nil {
 		slog.Error("set job running failed", "job", job.ID, "err", err)
 	}
@@ -141,7 +140,6 @@ func (e *Executor) run(ctx context.Context, job db.Job) {
 
 func (e *Executor) execute(ctx context.Context, job db.Job, log func(string)) error {
 	// Step 1: Discover
-	log(fmt.Sprintf("[discover] Searching for containers using image: %s", steps.ExtractImageName(job.ImageTag)))
 	result, err := steps.Discover(ctx, e.docker, job.ImageTag)
 	if err != nil {
 		return err
@@ -149,16 +147,14 @@ func (e *Executor) execute(ctx context.Context, job db.Job, log func(string)) er
 	if err := e.store.UpdateDiscovery(job.ID, result.ComposePath, result.Service); err != nil {
 		slog.Warn("persist discovery failed", "job", job.ID, "err", err)
 	}
-	log(fmt.Sprintf("[discover] Compose file: %s", result.ComposePath))
-	log(fmt.Sprintf("[discover] Service: %s", result.Service))
-	log("[discover] Discovery complete")
+	log(fmt.Sprintf("[discover] %s in %s", result.Service, result.ComposePath))
 
 	// Step 2: Validate
-	log("[validate] Validating deployment parameters")
 	if err := steps.Validate(result.ComposePath, result.Service, job.ImageTag, log); err != nil {
+		log("[validate] FAILED")
 		return err
 	}
-	log(fmt.Sprintf("[validate] OK — %s", result.ComposePath))
+	log("[validate] OK")
 
 	// Step 3: Pull
 	if err := steps.Pull(ctx, e.docker, job.ImageTag, e.secret, log); err != nil {

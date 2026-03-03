@@ -179,6 +179,15 @@ func parseTime(s string) time.Time {
 	return time.Time{}
 }
 
+// MarkInterruptedJobsFailed transitions any jobs stuck in 'running' to 'failed'.
+// Called on startup to clean up jobs that were in-flight when the server crashed.
+func (s *Store) MarkInterruptedJobsFailed() {
+	_, _ = s.db.Exec(
+		`UPDATE jobs SET status = 'failed', error = 'interrupted: server restarted',
+		 updated_at = CURRENT_TIMESTAMP WHERE status = 'running'`,
+	)
+}
+
 // --- Log file helpers ---
 
 // LogPath returns the absolute path for a job's log file.

@@ -58,6 +58,7 @@ func main() {
 		log.Fatalf("failed to open database: %v", err)
 	}
 	store := db.NewStore(sqlDB)
+	store.MarkInterruptedJobsFailed()
 
 	// Docker client
 	cli, err := dockerpkg.NewClient()

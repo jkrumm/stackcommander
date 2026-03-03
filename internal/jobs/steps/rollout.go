@@ -39,8 +39,7 @@ func Rollout(ctx context.Context, cli *client.Client, composePath, service, proj
 	}
 
 	scaleCount := scaleTarget(len(oldIDs))
-	logFn(fmt.Sprintf("[rollout] Rolling out service: %s (IMAGE_TAG=%s)", service, imageTag))
-	logFn(fmt.Sprintf("[rollout] Scaling service %s from %d→%d replicas", service, len(oldIDs), scaleCount))
+	logFn(fmt.Sprintf("[rollout] Scaling %s: %d→%d (IMAGE_TAG=%s)", service, len(oldIDs), scaleCount, imageTag))
 
 	// Write IMAGE_TAG into a job-scoped temp env file — never touch the user's .env.
 	// Docker Compose v2 --env-file replaces the auto-loaded .env entirely, so we read
@@ -65,12 +64,12 @@ func Rollout(ctx context.Context, cli *client.Client, composePath, service, proj
 	)
 	cmd.Dir = cwd
 	out, err := cmd.CombinedOutput()
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			logFn(fmt.Sprintf("[rollout] %s", line))
-		}
-	}
 	if err != nil {
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if line = strings.TrimSpace(line); line != "" {
+				logFn(fmt.Sprintf("[rollout] %s", line))
+			}
+		}
 		return fmt.Errorf("docker compose up --scale failed: %w", err)
 	}
 
@@ -84,12 +83,10 @@ func Rollout(ctx context.Context, cli *client.Client, composePath, service, proj
 		newIDs[i] = c.ID
 	}
 
-	logFn(fmt.Sprintf("[rollout] Waiting for %d new container(s) to become healthy", len(newContainers)))
-
 	// 4. Wait for each new container — each gets its own deadline.
 	for i, c := range newContainers {
 		id := c.ID
-		logFn(fmt.Sprintf("[rollout] Waiting for container %s to become healthy (%d/%d)", id[:min(12, len(id))], i+1, len(newContainers)))
+		logFn(fmt.Sprintf("[rollout] Waiting for %s (%d/%d)", id[:min(12, len(id))], i+1, len(newContainers)))
 
 		if err := waitHealthy(ctx, cli, id, healthTimeoutMS, logFn); err != nil {
 			rollbackContainers(cli, newIDs, err.Error(), logFn)
@@ -127,10 +124,16 @@ func waitHealthy(ctx context.Context, cli *client.Client, id string, timeoutMS i
 	short := id[:min(12, len(id))]
 	deadline := time.Now().Add(time.Duration(timeoutMS) * time.Millisecond)
 	start := time.Now()
+	lastProgress := time.Now()
 
 	for {
 		if time.Now().After(deadline) {
 			return fmt.Errorf("container %s did not become healthy within %ds", short, timeoutMS/1000)
+		}
+
+		if time.Since(lastProgress) >= 10*time.Second {
+			logFn(fmt.Sprintf("[rollout] Still waiting for %s... (%ds)", short, int(time.Since(start).Seconds())))
+			lastProgress = time.Now()
 		}
 
 		detail, err := dockerpkg.InspectContainer(ctx, cli, id)
@@ -145,7 +148,7 @@ func waitHealthy(ctx context.Context, cli *client.Client, id string, timeoutMS i
 		switch detail.State.Health.Status {
 		case "healthy":
 			elapsed := time.Since(start).Seconds()
-			logFn(fmt.Sprintf("[rollout] Container %s healthy after %.1fs", short, elapsed))
+			logFn(fmt.Sprintf("[rollout] %s healthy after %.1fs", short, elapsed))
 			return nil
 		case "unhealthy":
 			return fmt.Errorf("container %s became unhealthy", short)

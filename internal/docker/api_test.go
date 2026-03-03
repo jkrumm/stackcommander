@@ -101,9 +101,6 @@ func TestParsePullStream(t *testing.T) {
 		}
 
 		want := []string{
-			"Pulling from library/hello-world",
-			"Pull complete",
-			"Digest: sha256:abc123def456",
 			"Status: Downloaded newer image for hello-world:latest",
 		}
 		if len(logged) != len(want) {
@@ -117,14 +114,14 @@ func TestParsePullStream(t *testing.T) {
 		}
 	})
 
-	t.Run("already exists events pass through", func(t *testing.T) {
+	t.Run("already exists events are suppressed", func(t *testing.T) {
 		ndjson := `{"status":"Already exists","progressDetail":{},"id":"abc123"}`
 		var logged []string
 		_ = parsePullStream(strings.NewReader(ndjson), func(line string) {
 			logged = append(logged, line)
 		})
-		if len(logged) != 1 || logged[0] != "Already exists" {
-			t.Errorf("expected 'Already exists', got %v", logged)
+		if len(logged) != 0 {
+			t.Errorf("expected no log lines, got %v", logged)
 		}
 	})
 
@@ -143,6 +140,7 @@ func TestParsePullStream(t *testing.T) {
 		ndjson := strings.Join([]string{
 			`not valid json`,
 			`{"status":"Pull complete"}`,
+			`{"status":"Status: Image is up to date for hello-world:latest"}`,
 			`{broken`,
 		}, "\n")
 		var logged []string
@@ -152,8 +150,8 @@ func TestParsePullStream(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(logged) != 1 || logged[0] != "Pull complete" {
-			t.Errorf("expected ['Pull complete'], got %v", logged)
+		if len(logged) != 1 || logged[0] != "Status: Image is up to date for hello-world:latest" {
+			t.Errorf("expected ['Status: ...'], got %v", logged)
 		}
 	})
 
