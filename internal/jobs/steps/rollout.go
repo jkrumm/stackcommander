@@ -167,24 +167,29 @@ func waitHealthy(ctx context.Context, cli *client.Client, id string, timeoutMS i
 }
 
 // rollbackContainers stops and removes the given container IDs.
-// Uses a background context so cleanup completes even if the parent context is cancelled.
+// Uses a background context with 30s timeout per container so cleanup completes even if
+// the parent context is cancelled, but doesn't hang indefinitely.
 func rollbackContainers(cli *client.Client, ids []string, reason string, logFn func(string)) {
-	bctx := context.Background()
 	logFn(fmt.Sprintf("[rollout] Rollback triggered: %s", reason))
 	for _, id := range ids {
 		short := id[:min(12, len(id))]
 		logFn(fmt.Sprintf("[rollout] Rollback: stopping new container %s", short))
+
+		// Give each container operation 30s to complete, independent of parent context.
+		bctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		if err := dockerpkg.StopContainer(bctx, cli, id); err != nil {
 			logFn(fmt.Sprintf("[rollout] Rollback cleanup error: %s", err))
 		}
 		if err := dockerpkg.RemoveContainer(bctx, cli, id); err != nil {
 			logFn(fmt.Sprintf("[rollout] Rollback cleanup error: %s", err))
 		}
+		cancel()
 	}
 }
 
 // pollNewContainers retries findNewContainers up to 10 times with 500ms delays
 // to handle Docker API propagation delay after compose scale-up.
+// Respects context cancellation to avoid blocking after SIGTERM.
 func pollNewContainers(ctx context.Context, cli *client.Client, project, service string, oldIDs map[string]struct{}, expectedNew int) ([]container.Summary, error) {
 	found, err := findNewContainers(ctx, cli, project, service, oldIDs)
 	if err != nil {
@@ -194,14 +199,21 @@ func pollNewContainers(ctx context.Context, cli *client.Client, project, service
 		return found, nil
 	}
 
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
 	for attempt := 0; attempt < 10; attempt++ {
-		time.Sleep(500 * time.Millisecond)
-		found, err = findNewContainers(ctx, cli, project, service, oldIDs)
-		if err != nil {
-			return nil, err
-		}
-		if len(found) >= expectedNew {
-			return found, nil
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+			found, err = findNewContainers(ctx, cli, project, service, oldIDs)
+			if err != nil {
+				return nil, err
+			}
+			if len(found) >= expectedNew {
+				return found, nil
+			}
 		}
 	}
 
