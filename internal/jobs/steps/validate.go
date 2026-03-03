@@ -5,18 +5,28 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/compose-spec/compose-go/v2/cli"
 	"github.com/compose-spec/compose-go/v2/loader"
+	"go.yaml.in/yaml/v4"
 )
 
+// rawComposeService holds only the image field, parsed without variable substitution.
+type rawComposeService struct {
+	Image string `yaml:"image"`
+}
+
+type rawComposeFile struct {
+	Services map[string]rawComposeService `yaml:"services"`
+}
+
 // Validate checks that composePath is absolute, the compose file is parseable,
-// and the named service exists.
-//
-// If the service has no healthcheck configured (compose-level), a warning is
-// emitted via logFn so the user sees it before scale-up. This is advisory —
-// if the Docker image itself has a HEALTHCHECK instruction, the deploy will
-// still succeed. logFn may be nil.
+// and the named service satisfies all rolling-deploy requirements:
+//   - no port bindings (prevents a second instance from starting)
+//   - no fixed container_name (blocks scale-up)
+//   - healthcheck defined (required for zero-downtime polling)
+//   - image field references ${IMAGE_TAG} (ensures deploy uses the new image)
 func Validate(composePath, service, imageTag string, logFn func(string)) error {
 	if !filepath.IsAbs(composePath) {
 		return fmt.Errorf("compose_path must be absolute, got: %s", composePath)
@@ -47,14 +57,32 @@ func Validate(composePath, service, imageTag string, logFn func(string)) error {
 		return fmt.Errorf("service %q not found in %s", service, composePath)
 	}
 
-	// Warn if the service has no compose-level healthcheck.
-	// The deploy will still fail at rollout if the Docker image also lacks a
-	// HEALTHCHECK instruction — this is an early heads-up to the user.
-	if svc.HealthCheck == nil && logFn != nil {
-		logFn(fmt.Sprintf(
-			"[validate] Warning: service %q has no healthcheck configured. "+
-				"Add a HEALTHCHECK to your Dockerfile or a healthcheck: block to your compose service "+
-				"for zero-downtime deploys to work.", service))
+	if len(svc.Ports) > 0 {
+		return fmt.Errorf("service must not expose ports — port bindings prevent a second instance from starting")
+	}
+
+	if svc.ContainerName != "" {
+		return fmt.Errorf("service must not set container_name — a fixed name blocks rollout scale-up")
+	}
+
+	if svc.HealthCheck == nil || svc.HealthCheck.Disable {
+		return fmt.Errorf("service must define healthcheck — required for zero-downtime rolling deploys")
+	}
+
+	// Check raw YAML (before variable substitution) that the image field references IMAGE_TAG.
+	// compose-go resolves ${IMAGE_TAG:-default} at load time, so svc.Image cannot be used here.
+	if svc.Image != "" {
+		rawBytes, readErr := os.ReadFile(composePath)
+		if readErr == nil {
+			var raw rawComposeFile
+			if unmarshalErr := yaml.Unmarshal(rawBytes, &raw); unmarshalErr == nil {
+				if rawSvc, ok := raw.Services[service]; ok && rawSvc.Image != "" {
+					if !strings.Contains(rawSvc.Image, "IMAGE_TAG") {
+						return fmt.Errorf("service image must reference IMAGE_TAG (got: %s)", rawSvc.Image)
+					}
+				}
+			}
+		}
 	}
 
 	return nil
