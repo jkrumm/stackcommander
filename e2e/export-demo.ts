@@ -1,5 +1,5 @@
-import { writeFileSync } from 'node:fs'
 import type { JobResult } from './setup/fixtures'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'

@@ -30,7 +30,7 @@ describe('failed deployment lifecycle', () => {
 
   it('failed job has error field populated with docker pull message', () => {
     expect(failedJob.error).toBeTruthy()
-    expect(failedJob.error).toContain('Docker pull failed')
+    expect(failedJob.error).toContain('docker pull failed')
   })
 
   it('job logs contain pull step and executor error but not rollout', async () => {
