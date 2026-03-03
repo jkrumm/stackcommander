@@ -1,0 +1,3 @@
+services:
+  web:
+    image: ${IMAGE_TAG:-myapp:v1}

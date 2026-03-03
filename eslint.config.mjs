@@ -12,6 +12,7 @@ export default antfu({
     'apps/marketing/.astro/**',
     'apps/dashboard/src/api/generated/**',
     'docs/**',
+    'e2e/fixtures/validate/invalid.yml',
   ],
 })
   .override('antfu/react/rules', {

@@ -1,4 +1,10 @@
 import { execFileSync } from 'node:child_process'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const _DIR = fileURLToPath(new URL('.', import.meta.url))
+export const E2E_DIR = join(_DIR, '..')
+export const PROJECT_ROOT = join(E2E_DIR, '..')
 
 export type JobStatus = 'queued' | 'running' | 'success' | 'failed'
 
@@ -48,6 +54,30 @@ export function webhookHeaders(): HeadersInit {
 }
 
 export type { JobResult }
+
+// Start a detached container with the given image and Docker labels.
+// Returns the container ID. The container runs `sleep 3600` and is started with
+// --rm so it auto-removes when stopped. Callers must stop it in afterAll.
+export function startContainerWithLabels(
+  image: string,
+  labels: Record<string, string>,
+): string {
+  const args = ['run', '-d', '--rm']
+  for (const [k, v] of Object.entries(labels))
+    args.push('--label', `${k}=${v}`)
+  args.push(image, 'sleep', '3600')
+  return execFileSync('docker', args, { encoding: 'utf-8' }).trim()
+}
+
+// Stop a running container by ID. Silently ignores errors (already stopped/removed).
+export function stopContainer(id: string): void {
+  try {
+    execFileSync('docker', ['stop', id])
+  }
+  catch {
+    // ignore
+  }
+}
 
 // Poll /jobs/:id every second until status is success or failed.
 // Timeout accounts for queue depth: each rollout takes ~16s, up to 4 queued = ~64s worst case.

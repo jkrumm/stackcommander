@@ -50,7 +50,7 @@ func TestValidate_Success(t *testing.T) {
 	path := writeCompose(t, dir, `
 services:
   web:
-    image: localhost:7700/myapp:v1
+    image: ${IMAGE_TAG:-localhost:7700/myapp:v1}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 5s
@@ -69,61 +69,115 @@ func TestValidate_BuildOnlyService(t *testing.T) {
 services:
   web:
     build: .
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
 `)
-	// Service with no image: field — image check is skipped
+	// Build-only service has no image: field — IMAGE_TAG check is skipped
 	err := steps.Validate(path, "web", "myapp:v1", nil)
 	if err != nil {
 		t.Errorf("unexpected error for build-only service: %v", err)
 	}
 }
 
-func TestValidate_NoHealthcheckWarning(t *testing.T) {
+func TestValidate_HealthcheckRequiredFails(t *testing.T) {
 	dir := t.TempDir()
 	path := writeCompose(t, dir, `
 services:
   web:
-    image: myapp:v1
-`)
-	var warnings []string
-	logFn := func(s string) { warnings = append(warnings, s) }
-	err := steps.Validate(path, "web", "myapp:v1", logFn)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if len(warnings) == 0 {
-		t.Error("expected a healthcheck warning, got none")
-	}
-	if !strings.Contains(warnings[0], "healthcheck") {
-		t.Errorf("expected warning to mention healthcheck, got: %q", warnings[0])
-	}
-}
-
-func TestValidate_NoHealthcheckNoLogFn(t *testing.T) {
-	dir := t.TempDir()
-	path := writeCompose(t, dir, `
-services:
-  web:
-    image: myapp:v1
-`)
-	// nil logFn must not panic even when healthcheck is missing
-	if err := steps.Validate(path, "web", "myapp:v1", nil); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-// Image mismatch is no longer validated — the fragile strings.Contains check
-// was removed in favour of letting the discover step catch mismatches at runtime.
-// (The imageTag is used to find a running container; wrong images simply won't
-// have a matching container and discovery returns "no container found".)
-func TestValidate_ImageMismatchNoLongerErrors(t *testing.T) {
-	dir := t.TempDir()
-	path := writeCompose(t, dir, `
-services:
-  web:
-    image: other-image:v1
+    image: ${IMAGE_TAG:-myapp:v1}
 `)
 	err := steps.Validate(path, "web", "myapp:v1", nil)
-	if err != nil {
-		t.Errorf("image mismatch should not be an error at validate time, got: %v", err)
+	if err == nil {
+		t.Error("expected error when healthcheck is missing")
+	}
+	if !strings.Contains(err.Error(), "healthcheck") {
+		t.Errorf("expected error to mention healthcheck, got: %q", err)
+	}
+}
+
+func TestValidate_HealthcheckDisabledFails(t *testing.T) {
+	dir := t.TempDir()
+	path := writeCompose(t, dir, `
+services:
+  web:
+    image: ${IMAGE_TAG:-myapp:v1}
+    healthcheck:
+      disable: true
+`)
+	err := steps.Validate(path, "web", "myapp:v1", nil)
+	if err == nil {
+		t.Error("expected error when healthcheck is disabled")
+	}
+	if !strings.Contains(err.Error(), "healthcheck") {
+		t.Errorf("expected error to mention healthcheck, got: %q", err)
+	}
+}
+
+func TestValidate_PortsBindingFails(t *testing.T) {
+	dir := t.TempDir()
+	path := writeCompose(t, dir, `
+services:
+  web:
+    image: ${IMAGE_TAG:-myapp:v1}
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+`)
+	err := steps.Validate(path, "web", "myapp:v1", nil)
+	if err == nil {
+		t.Error("expected error for port bindings")
+	}
+	if !strings.Contains(err.Error(), "ports") {
+		t.Errorf("expected error to mention ports, got: %q", err)
+	}
+}
+
+func TestValidate_ContainerNameFails(t *testing.T) {
+	dir := t.TempDir()
+	path := writeCompose(t, dir, `
+services:
+  web:
+    image: ${IMAGE_TAG:-myapp:v1}
+    container_name: myapp
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+`)
+	err := steps.Validate(path, "web", "myapp:v1", nil)
+	if err == nil {
+		t.Error("expected error for container_name")
+	}
+	if !strings.Contains(err.Error(), "container_name") {
+		t.Errorf("expected error to mention container_name, got: %q", err)
+	}
+}
+
+func TestValidate_HardcodedImageFails(t *testing.T) {
+	dir := t.TempDir()
+	path := writeCompose(t, dir, `
+services:
+  web:
+    image: myapp:latest
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+`)
+	err := steps.Validate(path, "web", "myapp:latest", nil)
+	if err == nil {
+		t.Error("expected error for hardcoded image (no IMAGE_TAG reference)")
+	}
+	if !strings.Contains(err.Error(), "IMAGE_TAG") {
+		t.Errorf("expected error to mention IMAGE_TAG, got: %q", err)
 	}
 }
