@@ -35,6 +35,9 @@ services:
     image: registry.jkrumm.com/rollhook:latest
     environment:
       ROLLHOOK_SECRET: ${ROLLHOOK_SECRET}
+      # Set to your public RollHook URL to enable OIDC audience (aud) claim verification.
+      # Recommended — prevents tokens issued for other services from being accepted here.
+      ROLLHOOK_URL: ${ROLLHOOK_URL:-}
     volumes:
       # RollHook needs read-write socket access to manage container lifecycle.
       # To limit socket exposure, replace with: github.com/Tecnativa/docker-socket-proxy
@@ -69,6 +72,11 @@ services:
       retries: 3
       start_period: 5s # increase if your app takes longer to start
     labels:
+      # Required for OIDC deploys: which GitHub repos may deploy this service.
+      # Multiple repos comma-separated: myorg/api,myorg/worker
+      - rollhook.allowed_repos=myorg/myapp
+      # Optional: restrict to specific git refs (default: refs/heads/main and refs/heads/master)
+      # - rollhook.allowed_refs=refs/heads/main,refs/heads/prod
       - traefik.enable=true
       - traefik.http.routers.app.rule=Host(`example.com`)
       - traefik.http.routers.app.entrypoints=websecure

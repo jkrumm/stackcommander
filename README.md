@@ -61,17 +61,36 @@ Start the app manually once so RollHook can discover it from the running contain
 docker compose -f /srv/stacks/my-api/compose.yml up -d
 ```
 
-### 3. Trigger deploys from GitHub Actions
+### 3. Authorize your GitHub repo
+
+Add one label to your app service in compose.yml so RollHook knows which repos may deploy it:
 
 ```yaml
-- uses: jkrumm/rollhook-action@v1
-  with:
-    url: ${{ secrets.ROLLHOOK_URL }}
-    token: ${{ secrets.ROLLHOOK_SECRET }}
-    image_tag: registry.example.com/my-api:${{ github.sha }}
+labels:
+  - rollhook.allowed_repos=myorg/myapp
+  # Optional — restrict to specific refs (default: refs/heads/main, refs/heads/master)
+  # - rollhook.allowed_refs=refs/heads/main,refs/heads/prod
 ```
 
-The action POSTs the deploy, streams SSE logs live to the CI run, and fails the step on deployment failure. See [jkrumm/rollhook-action](https://github.com/jkrumm/rollhook-action) for full docs.
+### 4. Trigger deploys from GitHub Actions
+
+No secrets needed. GitHub Actions issues a short-lived cryptographic token per run:
+
+```yaml
+permissions:
+  id-token: write # required — allows requesting OIDC token
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: jkrumm/rollhook-action@v1
+        with:
+          url: ${{ vars.ROLLHOOK_URL }}
+          image_tag: registry.example.com/my-api:${{ github.sha }}
+```
+
+The action requests an OIDC token automatically, POSTs the deploy, streams SSE logs live to CI, and fails the step on deployment failure. See [jkrumm/rollhook-action](https://github.com/jkrumm/rollhook-action) for full docs.
 
 ---
 
@@ -103,14 +122,15 @@ See [`e2e/hello-world/`](e2e/hello-world/) for a complete reference app.
 
 ## Environment Variables
 
-| Var                        | Required | Description                                       |
-| -------------------------- | -------- | ------------------------------------------------- |
-| `ROLLHOOK_SECRET`          | yes      | Bearer token (min 7 chars) — all protected routes |
-| `DOCKER_HOST`              | no       | Docker daemon endpoint (default: local socket)    |
-| `PORT`                     | no       | Listen port (default: `7700`)                     |
-| `PUSHOVER_USER_KEY`        | no       | Pushover mobile notifications                     |
-| `PUSHOVER_APP_TOKEN`       | no       | Pushover mobile notifications                     |
-| `NOTIFICATION_WEBHOOK_URL` | no       | POST full job result JSON on completion           |
+| Var                        | Required | Description                                        |
+| -------------------------- | -------- | -------------------------------------------------- |
+| `ROLLHOOK_SECRET`          | yes      | Admin/static bearer token (min 7 chars)            |
+| `ROLLHOOK_URL`             | no       | Public server URL — enables OIDC `aud` claim check |
+| `DOCKER_HOST`              | no       | Docker daemon endpoint (default: local socket)     |
+| `PORT`                     | no       | Listen port (default: `7700`)                      |
+| `PUSHOVER_USER_KEY`        | no       | Pushover mobile notifications                      |
+| `PUSHOVER_APP_TOKEN`       | no       | Pushover mobile notifications                      |
+| `NOTIFICATION_WEBHOOK_URL` | no       | POST full job result JSON on completion            |
 
 ---
 
@@ -127,7 +147,7 @@ Interactive docs at `/openapi` on your running instance. Key routes:
 | `GET`  | `/health`         | none         | `{ status, version }`                       |
 | `GET`  | `/v2/*`           | bearer/basic | OCI registry proxy                          |
 
-**Auth:** `Authorization: Bearer <ROLLHOOK_SECRET>` on all protected routes.
+**Auth:** `POST /deploy` accepts GitHub Actions OIDC JWTs (no secret needed in CI) or `Bearer <ROLLHOOK_SECRET>`. All other routes require `Bearer <ROLLHOOK_SECRET>`.
 
 ---
 

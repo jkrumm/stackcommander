@@ -28,7 +28,7 @@ function oidcHeaders(token: string): HeadersInit {
   return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
 }
 
-describe('OIDC authentication', () => {
+describe('oidc authentication', () => {
   it('valid OIDC token with allowed repo → deploy accepted', async () => {
     const token = await getOIDCToken({
       repository: 'rollhook-e2e/hello',
@@ -58,7 +58,7 @@ describe('OIDC authentication', () => {
     expect(res.status).toBe(403)
   })
 
-  it('OIDC token with PR ref → 403 (hard deny)', async () => {
+  it('oidc token with PR ref → 403 (hard deny)', async () => {
     const token = await getOIDCToken({
       repository: 'rollhook-e2e/hello',
       ref: 'refs/pull/42/merge',
@@ -71,7 +71,7 @@ describe('OIDC authentication', () => {
     expect(res.status).toBe(403)
   })
 
-  it('OIDC token with feature branch ref → 403 (default fail-secure)', async () => {
+  it('oidc token with feature branch ref → 403 (default fail-secure)', async () => {
     const token = await getOIDCToken({
       repository: 'rollhook-e2e/hello',
       ref: 'refs/heads/feature/my-feature',
@@ -84,7 +84,7 @@ describe('OIDC authentication', () => {
     expect(res.status).toBe(403)
   })
 
-  it('OIDC token with refs/heads/master → deploy accepted', async () => {
+  it('oidc token with refs/heads/master → deploy accepted', async () => {
     const token = await getOIDCToken({
       repository: 'rollhook-e2e/hello',
       ref: 'refs/heads/master',
@@ -122,7 +122,7 @@ describe('OIDC authentication', () => {
     expect(res.status).not.toBe(403)
   })
 
-  it('OIDC token cannot access admin /jobs endpoint → 403', async () => {
+  it('oidc token cannot access admin /jobs endpoint → 403', async () => {
     const token = await getOIDCToken({
       repository: 'rollhook-e2e/hello',
       ref: 'refs/heads/main',
