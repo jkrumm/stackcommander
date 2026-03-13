@@ -111,7 +111,8 @@ func RegisterDeploy(humaAPI huma.API, exec *jobspkg.Executor, store *db.Store, c
 			}
 			disc, err := steps.Discover(ctx, cli, input.Body.ImageTag)
 			if err != nil {
-				return nil, huma.NewError(http.StatusForbidden, "service discovery failed: "+err.Error())
+				fmt.Printf("OIDC service discovery error: %v\n", err)
+				return nil, huma.NewError(http.StatusInternalServerError, "service discovery failed")
 			}
 			if err := checkOIDCLabels(claims, disc.Labels); err != nil {
 				return nil, huma.NewError(http.StatusForbidden, err.Error())

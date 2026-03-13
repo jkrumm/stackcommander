@@ -1,5 +1,11 @@
 export type JobStatus = 'queued' | 'running' | 'success' | 'failed'
 
+export interface ChartDataPoint {
+  day: string
+  success: number
+  failed: number
+}
+
 export interface JobResult {
   id: string
   app: string

@@ -12,6 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.10
@@ -46,7 +49,7 @@ jobs:
           if ! diff -u apps/dashboard/openapi.json /tmp/fresh_openapi.json; then
             echo ""
             echo "openapi.json is out of date. Regenerate:"
-            echo "  docker run --rm -v \$(pwd):/workspace -w /workspace golang:1.25-alpine go run ./cmd/gendocs > apps/dashboard/openapi.json"
+            echo "  docker run --rm -v \$(pwd):/workspace -w /workspace golang:1.25-alpine go run ./cmd/gendocs 2>/dev/null > apps/dashboard/openapi.json"
             exit 1
           fi
 
@@ -70,7 +73,7 @@ jobs:
         run: |
           pulled=0
           for i in 1 2 3; do
-            if docker pull oven/bun:1.3.9-slim; then
+            if docker pull oven/bun:1.3.10-slim; then
               pulled=1
               break
             fi
@@ -80,7 +83,7 @@ jobs:
             fi
           done
           if [ "$pulled" -ne 1 ]; then
-            echo "Failed to pull oven/bun:1.3.9-slim after 3 attempts"
+            echo "Failed to pull oven/bun:1.3.10-slim after 3 attempts"
             exit 1
           fi
       - name: Run E2E tests

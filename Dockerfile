@@ -48,10 +48,13 @@ COPY --from=go-builder /rollhook /usr/local/bin/rollhook
 ARG VERSION=dev
 ENV VERSION=$VERSION
 
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data \
+  && useradd --system --home-dir /app --shell /usr/sbin/nologin rollhook \
+  && chown -R rollhook:rollhook /app
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=5 \
   CMD curl -sf http://localhost:7700/health || exit 1
 
 EXPOSE 7700
+USER rollhook
 CMD ["/usr/local/bin/rollhook"]

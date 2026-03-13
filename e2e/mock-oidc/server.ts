@@ -113,4 +113,7 @@ async function startServer(): Promise<void> {
   console.warn(`Mock OIDC server running — issuer: ${ISSUER}`)
 }
 
-startServer().catch(console.error)
+startServer().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})

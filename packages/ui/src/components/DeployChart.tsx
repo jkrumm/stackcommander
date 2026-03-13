@@ -1,10 +1,5 @@
+import type { ChartDataPoint } from '../types'
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts'
-
-export interface ChartDataPoint {
-  day: string
-  success: number
-  failed: number
-}
 
 interface DeployChartProps {
   data: ChartDataPoint[]

@@ -39,11 +39,16 @@ services:
   rollhook:
     image: rollhook-e2e-server:latest
     pull_policy: never
+    # Run as root in E2E so the container can access the host Docker socket
+    # regardless of the host docker group GID. Production deployments use
+    # the non-root rollhook user defined in the Dockerfile.
+    user: root
     ports:
       - '7700:7700'
     environment:
       ROLLHOOK_SECRET: ${ROLLHOOK_SECRET}
       ROLLHOOK_OIDC_ISSUER: http://mock-oidc:8080
+      ROLLHOOK_URL: ${ROLLHOOK_URL:-http://localhost:7700}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - type: bind

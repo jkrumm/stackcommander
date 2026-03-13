@@ -33,6 +33,7 @@ describe('oidc authentication', () => {
     const token = await getOIDCToken({
       repository: 'rollhook-e2e/hello',
       ref: 'refs/heads/main',
+      aud: BASE_URL,
     })
     const res = await fetch(`${BASE_URL}/deploy?async=true`, {
       method: 'POST',
@@ -88,6 +89,7 @@ describe('oidc authentication', () => {
     const token = await getOIDCToken({
       repository: 'rollhook-e2e/hello',
       ref: 'refs/heads/master',
+      aud: BASE_URL,
     })
     const res = await fetch(`${BASE_URL}/deploy?async=true`, {
       method: 'POST',
