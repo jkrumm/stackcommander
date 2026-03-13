@@ -53,9 +53,9 @@ func newTestServer(t *testing.T) (http.Handler, *db.Store, string) {
 	humaAPI := humachi.New(r, config)
 
 	// Auth middleware matching production setup.
-	humaAPI.UseMiddleware(middleware.HumaAuth(humaAPI, testSecret))
+	humaAPI.UseMiddleware(middleware.HumaAuth(humaAPI, testSecret, nil))
 
-	api.RegisterDeploy(humaAPI, exec, store)
+	api.RegisterDeploy(humaAPI, exec, store, cli)
 	api.RegisterJobsAPI(humaAPI, store)
 	r.With(middleware.RequireAuth(testSecret)).Get("/jobs/{id}/logs", api.StreamLogsHandler(store, dataDir))
 
@@ -158,7 +158,7 @@ func TestListJobs_WithFilter(t *testing.T) {
 	config := huma.DefaultConfig("RollHook", "test")
 	config.DocsPath = ""
 	humaAPI := humachi.New(r, config)
-	humaAPI.UseMiddleware(middleware.HumaAuth(humaAPI, testSecret))
+	humaAPI.UseMiddleware(middleware.HumaAuth(humaAPI, testSecret, nil))
 	api.RegisterJobsAPI(humaAPI, store)
 
 	req := httptest.NewRequest(http.MethodGet, "/jobs?status=queued", nil)

@@ -19,6 +19,7 @@ import (
 	dockerpkg "github.com/jkrumm/rollhook/internal/docker"
 	"github.com/jkrumm/rollhook/internal/jobs"
 	"github.com/jkrumm/rollhook/internal/middleware"
+	oidcpkg "github.com/jkrumm/rollhook/internal/oidc"
 	"github.com/jkrumm/rollhook/internal/registry"
 	"github.com/jkrumm/rollhook/internal/state"
 )
@@ -74,6 +75,19 @@ func main() {
 
 	exec := jobs.NewExecutor(jobCtx, store, cli, secret, dataDir)
 
+	// Initialize OIDC verifier. Non-fatal on failure — log warning and disable OIDC.
+	// ROLLHOOK_OIDC_ISSUER overrides the default GitHub issuer (for E2E tests).
+	// ROLLHOOK_URL sets the expected audience claim; if unset, aud check is skipped.
+	var oidcVerifier *oidcpkg.Verifier
+	if v, err := oidcpkg.New(ctx); err != nil {
+		slog.Warn("OIDC verifier init failed — OIDC tokens will be rejected", "error", err)
+	} else {
+		oidcVerifier = v
+		if os.Getenv("ROLLHOOK_URL") == "" {
+			slog.Warn("ROLLHOOK_URL not set — OIDC audience (aud) check is skipped")
+		}
+	}
+
 	r := chi.NewRouter()
 
 	config := huma.DefaultConfig("RollHook API", "0.1.0")
@@ -93,7 +107,7 @@ func main() {
 	// are checked; public operations (health, openapi) pass through.
 	// - No Authorization header or non-Bearer format → 401 Unauthorized
 	// - Bearer with wrong token → 403 Forbidden
-	humaAPI.UseMiddleware(middleware.HumaAuth(humaAPI, secret))
+	humaAPI.UseMiddleware(middleware.HumaAuth(humaAPI, secret, oidcVerifier))
 
 	// Scalar UI — served at /openapi, spec JSON is at /openapi.json (huma default)
 	r.Get("/openapi", func(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +116,7 @@ func main() {
 	})
 
 	api.RegisterHealth(humaAPI)
-	api.RegisterDeploy(humaAPI, exec, store)
+	api.RegisterDeploy(humaAPI, exec, store, cli)
 	api.RegisterJobsAPI(humaAPI, store)
 
 	// SSE log stream — registered directly on Chi to bypass huma's response wrapping.

@@ -11,6 +11,7 @@ services:
       start_period: 10s
       retries: 5
     labels:
+      - rollhook.allowed_repos=rollhook-e2e/hello
       - traefik.enable=true
       - traefik.http.routers.hello.rule=PathPrefix(`/`)
       - traefik.http.routers.hello.entrypoints=web

@@ -3,14 +3,19 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/docker/docker/client"
 	"github.com/jkrumm/rollhook/internal/db"
 	jobspkg "github.com/jkrumm/rollhook/internal/jobs"
+	"github.com/jkrumm/rollhook/internal/jobs/steps"
+	oidcpkg "github.com/jkrumm/rollhook/internal/oidc"
 )
 
 type DeployInput struct {
@@ -49,7 +54,42 @@ func syncTimeout() time.Duration {
 	return time.Duration(healthMS)*time.Millisecond + 5*time.Minute
 }
 
-func RegisterDeploy(humaAPI huma.API, exec *jobspkg.Executor, store *db.Store) {
+// checkOIDCLabels validates OIDC claims against service labels.
+// Returns an error if the repository or ref is not allowed.
+// PR refs (refs/pull/*) are hard-denied before this function is called.
+func checkOIDCLabels(claims oidcpkg.Claims, labels map[string]string) error {
+	allowedRepos := labels["rollhook.allowed_repos"]
+	if allowedRepos == "" {
+		return fmt.Errorf("service has no rollhook.allowed_repos label — OIDC deploys are denied by default")
+	}
+	repoAllowed := false
+	for _, r := range strings.Split(allowedRepos, ",") {
+		if strings.TrimSpace(r) == claims.Repository {
+			repoAllowed = true
+			break
+		}
+	}
+	if !repoAllowed {
+		return fmt.Errorf("repository %q is not in rollhook.allowed_repos", claims.Repository)
+	}
+
+	allowedRefs := labels["rollhook.allowed_refs"]
+	if allowedRefs == "" {
+		// Default fail-secure: only main and master
+		if claims.Ref != "refs/heads/main" && claims.Ref != "refs/heads/master" {
+			return fmt.Errorf("ref %q not allowed (default: refs/heads/main, refs/heads/master)", claims.Ref)
+		}
+		return nil
+	}
+	for _, ref := range strings.Split(allowedRefs, ",") {
+		if strings.TrimSpace(ref) == claims.Ref {
+			return nil
+		}
+	}
+	return fmt.Errorf("ref %q is not in rollhook.allowed_refs", claims.Ref)
+}
+
+func RegisterDeploy(humaAPI huma.API, exec *jobspkg.Executor, store *db.Store, cli *client.Client) {
 	huma.Register(humaAPI, huma.Operation{
 		OperationID: "post-deploy",
 		Method:      http.MethodPost,
@@ -62,6 +102,22 @@ func RegisterDeploy(humaAPI huma.API, exec *jobspkg.Executor, store *db.Store) {
 		if input.Body.ImageTag == "" {
 			return nil, huma.NewError(http.StatusBadRequest, "image_tag is required")
 		}
+
+		// OIDC authorization: validate repository and ref against service labels.
+		if claims, ok := oidcpkg.ClaimsFromContext(ctx); ok {
+			// Hard deny: PR refs cannot deploy regardless of label configuration.
+			if strings.HasPrefix(claims.Ref, "refs/pull/") {
+				return nil, huma.NewError(http.StatusForbidden, "PR ref deploys are not allowed")
+			}
+			disc, err := steps.Discover(ctx, cli, input.Body.ImageTag)
+			if err != nil {
+				return nil, huma.NewError(http.StatusForbidden, "service discovery failed: "+err.Error())
+			}
+			if err := checkOIDCLabels(claims, disc.Labels); err != nil {
+				return nil, huma.NewError(http.StatusForbidden, err.Error())
+			}
+		}
+
 		job := jobspkg.NewJob(input.Body.ImageTag)
 		if err := exec.Submit(job); err != nil {
 			if errors.Is(err, jobspkg.ErrQueueFull) || errors.Is(err, jobspkg.ErrQueueDrained) {
