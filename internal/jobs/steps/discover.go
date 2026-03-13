@@ -16,6 +16,7 @@ type DiscoveryResult struct {
 	ComposePath string
 	Service     string
 	Project     string
+	Labels      map[string]string // all labels from the discovered container
 }
 
 // Discover finds the running container whose image matches imageTag and
@@ -92,7 +93,7 @@ func ExtractComposeInfo(labels map[string]string, name string) (*DiscoveryResult
 		return nil, fmt.Errorf("container %s is missing 'project' label — not started via docker compose", name)
 	}
 
-	return &DiscoveryResult{ComposePath: composePath, Service: service, Project: project}, nil
+	return &DiscoveryResult{ComposePath: composePath, Service: service, Project: project, Labels: labels}, nil
 }
 
 func containerName(c *container.Summary) string {

@@ -36,7 +36,7 @@ func main() {
 
 	// Register all operations — nil deps are safe here since no requests are made.
 	api.RegisterHealth(humaAPI)
-	api.RegisterDeploy(humaAPI, nil, nil)
+	api.RegisterDeploy(humaAPI, nil, nil, nil)
 	api.RegisterJobsAPI(humaAPI, nil)
 
 	// Fetch the spec via the huma-registered /openapi.json route.
