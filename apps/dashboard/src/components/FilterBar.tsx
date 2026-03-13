@@ -18,7 +18,7 @@ interface FilterBarProps {
 }
 
 export function FilterBar({ jobs, selectedApp, selectedStatus, onAppChange, onStatusChange }: FilterBarProps) {
-  const apps = Array.from(new Set(jobs.map(j => j.app))).sort()
+  const apps = [...new Set(jobs.map(j => j.app))].toSorted()
 
   const counts = jobs.reduce<Record<string, number>>((acc, j) => {
     acc[j.status] = (acc[j.status] ?? 0) + 1

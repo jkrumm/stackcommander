@@ -21,6 +21,14 @@ export default antfu({
       'react-refresh/only-export-components': 'off',
     },
   })
+  .override('antfu/regexp/rules', {
+    rules: {
+      // e18e/prefer-static-regex + eslint-plugin-regexp@3.1.0 causes a
+      // stack overflow in regexp/no-useless-dollar-replacements when it
+      // tries to dereference variable-held regexes. Disable until fixed.
+      'e18e/prefer-static-regex': 'off',
+    },
+  })
   .override('antfu/perfectionist/setup', {
     rules: {
       // Treat bun:* modules as builtins (same category as node:*) so they

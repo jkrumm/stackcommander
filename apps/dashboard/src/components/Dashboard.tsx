@@ -16,10 +16,7 @@ function computeChartData(jobs: JobResult[]): ChartDataPoint[] {
     entry[job.status]++
     map.set(day, entry)
   }
-  return Array.from(map.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-14)
-    .map(([day, counts]) => ({ day: day.slice(5), ...counts }))
+  return [...map.entries()].toSorted(([a], [b]) => a.localeCompare(b)).slice(-14).map(([day, counts]) => ({ day: day.slice(5), ...counts }))
 }
 
 interface DashboardProps {

@@ -32,8 +32,8 @@ export function DeployChart({ data, selectedDay, onDayClick }: DeployChartProps)
         onClick={onDayClick
           ? (chartData) => {
               const day = chartData?.activeLabel
-              if (day)
-                onDayClick(day)
+              if (day != null)
+                onDayClick(String(day))
             }
           : undefined}
       >
