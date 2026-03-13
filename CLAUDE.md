@@ -6,13 +6,13 @@
 
 ```bash
 # Build
-docker run --rm -v "$(pwd)":/workspace -w /workspace golang:1.24-alpine go build ./...
+docker run --rm -v "$(pwd)":/workspace -w /workspace golang:1.25-alpine go build ./...
 
 # Test
-docker run --rm -v "$(pwd)":/workspace -w /workspace golang:1.24-alpine go test ./...
+docker run --rm -v "$(pwd)":/workspace -w /workspace golang:1.25-alpine go test ./...
 
 # Regenerate openapi.json (redirect stderr first or go module logs corrupt the JSON):
-docker run --rm -v "$(pwd)":/workspace -w /workspace golang:1.24-alpine \
+docker run --rm -v "$(pwd)":/workspace -w /workspace golang:1.25-alpine \
   go run ./cmd/gendocs 2>/dev/null > apps/dashboard/openapi.json
 
 # Then regenerate TypeScript types:
